@@ -4,6 +4,8 @@
 
 현재 저장소에는 VLM 인벤토리 모듈과 ACT 데이터 수집·학습 보조 파일이 들어 있다. YOLO 손 감지 모듈, 물체별 ACT 정책 로더, 전체 시스템 통합 실행기는 이후 별도 모듈로 추가한다.
 
+기본 시연은 `data/demo_cases_syringe_pill.json`의 감기 입력 하나를 사용한다. 입력에는 환자·케이스·질환만 있으며, 실행 시 Scenario Registry에서 `Syringe`, `Pill` 순서가 결정된다.
+
 ## 목표 처리 흐름
 
 ```text
