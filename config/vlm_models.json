@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "default_model": "qwen3_vl_2b",
+  "models": [
+    {
+      "key": "qwen3_vl_2b",
+      "model_id": "Qwen/Qwen3-VL-2B-Instruct",
+      "model_class": "Qwen3VLForConditionalGeneration",
+      "priority": 1,
+      "quantization": {
+        "load_in_4bit": true,
+        "quant_type": "nf4",
+        "use_double_quant": true,
+        "compute_dtype": "bfloat16"
+      }
+    },
+    {
+      "key": "qwen2_5_vl_3b",
+      "model_id": "Qwen/Qwen2.5-VL-3B-Instruct",
+      "model_class": "Qwen2_5_VLForConditionalGeneration",
+      "priority": 2,
+      "quantization": {
+        "load_in_4bit": true,
+        "quant_type": "nf4",
+        "use_double_quant": true,
+        "compute_dtype": "bfloat16"
+      }
+    },
+    {
+      "key": "qwen3_vl_4b",
+      "model_id": "Qwen/Qwen3-VL-4B-Instruct",
+      "model_class": "Qwen3VLForConditionalGeneration",
+      "priority": 3,
+      "quantization": {
+        "load_in_4bit": true,
+        "quant_type": "nf4",
+        "use_double_quant": true,
+        "compute_dtype": "bfloat16"
+      }
+    }
+  ]
+}

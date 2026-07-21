@@ -1,0 +1,6 @@
+accelerate>=1.0,<2
+bitsandbytes>=0.45,<1
+Pillow>=10,<13
+qwen-vl-utils>=0.0.14,<1
+torch>=2.5,<3
+transformers>=4.57,<6

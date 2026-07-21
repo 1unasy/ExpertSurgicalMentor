@@ -148,6 +148,8 @@ move_queue = required_tools와 present_required_tools의 교집합
 
 없는 물품은 건너뛰되 `missing_tools`에 반드시 기록한다. VLM과 YOLO의 물품 존재 판단이 서로 다르면 로봇을 실행하지 않고 프레임을 다시 획득한다.
 
+VLM의 원시 판정에는 `assist_tray_tools`를 추가한다. 로봇의 이동 완료 이벤트를 받은 뒤 해당 물품이 후속 프레임의 `AssistTray`에서 확인된 경우에만 `moved_tools`에 반영한다. 단순히 작업 공간 어딘가에 보이는 것만으로 이동 성공으로 처리하지 않는다.
+
 ### 4.4 최종 사용자 출력
 
 ```json
@@ -217,6 +219,8 @@ Robot Task Router
 | `/camera/keyframe` | VLM 검사용 대표 프레임 |
 | `/perception/detections` | YOLO 클래스, bbox, 중심점, 신뢰도 |
 | `/inventory/state` | 필요·존재·누락·이동 완료 물품 |
+
+`/robot/move_completed`는 이전 케이스의 지연 이벤트를 차단할 수 있도록 `case_id`와 `tool_id`를 포함한 JSON으로 전달한다.
 | `/robot/move_queue` | 실행할 물품 ID 배열 |
 | `/safety/state` | `READY`, `STOPPED`, `ERROR` |
 | `/session/report` | 필요한 물품·옮긴 물품·없는 물품 |
@@ -301,7 +305,7 @@ VLM 선택 기준은 일반 벤치마크 점수보다 다음 프로젝트 지표
 1. 네 물품을 단독·혼합·누락 조건으로 촬영한다.
 2. Scenario Registry가 질환별 `required_tools`를 반환한다.
 3. VLM에 이미지 한 장과 `required_tools`를 입력한다.
-4. `present_required_tools`, `missing_tools`, `move_queue` JSON을 생성한다.
+4. `present_required_tools`, `missing_tools`, `assist_tray_tools`, `move_queue` JSON을 생성한다.
 5. 15개 가상 케이스의 정답과 비교한다.
 6. 미등록 질환 입력 시 `등록되지 않은 질환입니다.`가 정확히 출력되는지 확인한다.
 

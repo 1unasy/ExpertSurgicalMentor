@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://expert-surgical-mentor.local/schemas/case_input.schema.json",
+  "title": "ExpertSurgicalMentor case input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["patient_id", "case_id", "disease_name"],
+  "properties": {
+    "patient_id": {
+      "type": "string",
+      "pattern": "^(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9]{4,32}$"
+    },
+    "case_id": {
+      "type": "string",
+      "pattern": "^(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9_]{4,64}$"
+    },
+    "disease_name": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

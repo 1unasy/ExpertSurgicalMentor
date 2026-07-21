@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "unsupported_disease_message": "등록되지 않은 질환입니다.",
+  "allowed_tools": ["Syringe", "Glasses", "Pill", "XRay"],
+  "scenarios": [
+    {
+      "scenario_id": "SIM_COLD",
+      "disease_name": "감기",
+      "required_tools": ["Syringe", "Pill"]
+    },
+    {
+      "scenario_id": "SIM_PNEUMONIA",
+      "disease_name": "폐렴",
+      "required_tools": ["XRay", "Pill", "Syringe"]
+    },
+    {
+      "scenario_id": "SIM_FRACTURE",
+      "disease_name": "골절",
+      "required_tools": ["Glasses", "XRay", "Pill"]
+    }
+  ]
+}

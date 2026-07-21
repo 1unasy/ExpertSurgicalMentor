@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "description": "카메라 장면 정답은 평가용이며 VLM 입력 텍스트에 포함하지 않는다.",
+  "cases": [
+    {
+      "case_id": "COLD_001",
+      "patient_id": "P1COLD01",
+      "disease_name": "감기",
+      "scene_tools": ["Syringe", "Pill"],
+      "expected_present_required_tools": ["Syringe", "Pill"],
+      "expected_missing_tools": [],
+      "expected_move_queue": ["Syringe", "Pill"]
+    },
+    {
+      "case_id": "COLD_002",
+      "patient_id": "P2COLD02",
+      "disease_name": "감기",
+      "scene_tools": ["Syringe"],
+      "expected_present_required_tools": ["Syringe"],
+      "expected_missing_tools": ["Pill"],
+      "expected_move_queue": ["Syringe"]
+    },
+    {
+      "case_id": "COLD_003",
+      "patient_id": "P3COLD03",
+      "disease_name": "감기",
+      "scene_tools": ["Pill"],
+      "expected_present_required_tools": ["Pill"],
+      "expected_missing_tools": ["Syringe"],
+      "expected_move_queue": ["Pill"]
+    },
+    {
+      "case_id": "COLD_004",
+      "patient_id": "P4COLD04",
+      "disease_name": "감기",
+      "scene_tools": [],
+      "expected_present_required_tools": [],
+      "expected_missing_tools": ["Syringe", "Pill"],
+      "expected_move_queue": []
+    },
+    {
+      "case_id": "COLD_005",
+      "patient_id": "P5COLD05",
+      "disease_name": "감기",
+      "scene_tools": ["Syringe", "Pill", "Glasses", "XRay"],
+      "expected_present_required_tools": ["Syringe", "Pill"],
+      "expected_missing_tools": [],
+      "expected_move_queue": ["Syringe", "Pill"]
+    },
+    {
+      "case_id": "PNEUMONIA_001",
+      "patient_id": "P1PNEU01",
+      "disease_name": "폐렴",
+      "scene_tools": ["XRay", "Pill", "Syringe"],
+      "expected_present_required_tools": ["XRay", "Pill", "Syringe"],
+      "expected_missing_tools": [],
+      "expected_move_queue": ["XRay", "Pill", "Syringe"]
+    },
+    {
+      "case_id": "PNEUMONIA_002",
+      "patient_id": "P2PNEU02",
+      "disease_name": "폐렴",
+      "scene_tools": ["Pill", "Syringe"],
+      "expected_present_required_tools": ["Pill", "Syringe"],
+      "expected_missing_tools": ["XRay"],
+      "expected_move_queue": ["Pill", "Syringe"]
+    },
+    {
+      "case_id": "PNEUMONIA_003",
+      "patient_id": "P3PNEU03",
+      "disease_name": "폐렴",
+      "scene_tools": ["XRay", "Syringe"],
+      "expected_present_required_tools": ["XRay", "Syringe"],
+      "expected_missing_tools": ["Pill"],
+      "expected_move_queue": ["XRay", "Syringe"]
+    },
+    {
+      "case_id": "PNEUMONIA_004",
+      "patient_id": "P4PNEU04",
+      "disease_name": "폐렴",
+      "scene_tools": ["XRay", "Pill"],
+      "expected_present_required_tools": ["XRay", "Pill"],
+      "expected_missing_tools": ["Syringe"],
+      "expected_move_queue": ["XRay", "Pill"]
+    },
+    {
+      "case_id": "PNEUMONIA_005",
+      "patient_id": "P5PNEU05",
+      "disease_name": "폐렴",
+      "scene_tools": ["XRay", "Syringe", "Glasses"],
+      "expected_present_required_tools": ["XRay", "Syringe"],
+      "expected_missing_tools": ["Pill"],
+      "expected_move_queue": ["XRay", "Syringe"]
+    },
+    {
+      "case_id": "FRACTURE_001",
+      "patient_id": "P1FRAC01",
+      "disease_name": "골절",
+      "scene_tools": ["Glasses", "XRay", "Pill"],
+      "expected_present_required_tools": ["Glasses", "XRay", "Pill"],
+      "expected_missing_tools": [],
+      "expected_move_queue": ["Glasses", "XRay", "Pill"]
+    },
+    {
+      "case_id": "FRACTURE_002",
+      "patient_id": "P2FRAC02",
+      "disease_name": "골절",
+      "scene_tools": ["XRay", "Pill"],
+      "expected_present_required_tools": ["XRay", "Pill"],
+      "expected_missing_tools": ["Glasses"],
+      "expected_move_queue": ["XRay", "Pill"]
+    },
+    {
+      "case_id": "FRACTURE_003",
+      "patient_id": "P3FRAC03",
+      "disease_name": "골절",
+      "scene_tools": ["Glasses", "Pill"],
+      "expected_present_required_tools": ["Glasses", "Pill"],
+      "expected_missing_tools": ["XRay"],
+      "expected_move_queue": ["Glasses", "Pill"]
+    },
+    {
+      "case_id": "FRACTURE_004",
+      "patient_id": "P4FRAC04",
+      "disease_name": "골절",
+      "scene_tools": ["Glasses", "XRay"],
+      "expected_present_required_tools": ["Glasses", "XRay"],
+      "expected_missing_tools": ["Pill"],
+      "expected_move_queue": ["Glasses", "XRay"]
+    },
+    {
+      "case_id": "FRACTURE_005",
+      "patient_id": "P5FRAC05",
+      "disease_name": "골절",
+      "scene_tools": ["Glasses", "Pill", "Syringe"],
+      "expected_present_required_tools": ["Glasses", "Pill"],
+      "expected_missing_tools": ["XRay"],
+      "expected_move_queue": ["Glasses", "Pill"]
+    }
+  ]
+}

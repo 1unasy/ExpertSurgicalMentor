@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://expert-surgical-mentor.local/schemas/inventory_output.schema.json",
+  "title": "ExpertSurgicalMentor inventory result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "patient_id",
+    "case_id",
+    "scenario_id",
+    "required_tools",
+    "present_required_tools",
+    "missing_tools",
+    "move_queue",
+    "moved_tools"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["ready", "ready_with_missing_tools", "no_required_tools_present", "completed"]
+    },
+    "patient_id": {"type": "string"},
+    "case_id": {"type": "string"},
+    "scenario_id": {"type": "string", "enum": ["SIM_COLD", "SIM_PNEUMONIA", "SIM_FRACTURE"]},
+    "required_tools": {"$ref": "#/$defs/toolList"},
+    "present_required_tools": {"$ref": "#/$defs/toolList"},
+    "missing_tools": {"$ref": "#/$defs/toolList"},
+    "move_queue": {"$ref": "#/$defs/toolList"},
+    "moved_tools": {"$ref": "#/$defs/toolList"}
+  },
+  "$defs": {
+    "toolList": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["Syringe", "Glasses", "Pill", "XRay"]
+      }
+    }
+  }
+}
