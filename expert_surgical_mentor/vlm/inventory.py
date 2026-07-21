@@ -24,6 +24,13 @@ class VisualInventoryAssessment:
     missing_tools: tuple[str, ...]
     assist_tray_tools: tuple[str, ...]
 
+    @property
+    def main_tray_tools(self) -> tuple[str, ...]:
+        """Tools seen on MainToolTray, derived from the exclusive tray contract."""
+
+        assist = set(self.assist_tray_tools)
+        return tuple(tool for tool in self.present_required_tools if tool not in assist)
+
     @classmethod
     def from_model_text(cls, model_text: str) -> "VisualInventoryAssessment":
         text = model_text.strip()

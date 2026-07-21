@@ -7,6 +7,7 @@ from expert_surgical_mentor.vlm.inventory import (
     VisualInventoryAssessment,
 )
 from expert_surgical_mentor.vlm.node import (
+    InventoryConsensusError,
     InventoryWorkflow,
     InventoryWorkflowError,
     VlmInventoryController,
@@ -17,6 +18,16 @@ from expert_surgical_mentor.scenario_registry import ScenarioRegistry
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = PROJECT_ROOT / "config" / "scenario_registry.json"
+COLD_CASE = {
+    "patient_id": "P1COLD01",
+    "case_id": "COLD_001",
+    "disease_name": "감기",
+}
+PNEUMONIA_CASE = {
+    "patient_id": "PT7A21B",
+    "case_id": "CASE_2026_001",
+    "disease_name": "폐렴",
+}
 
 
 class StubPromptBuilder:
@@ -34,11 +45,36 @@ class StubVisionBackend:
         return self._assessments.popleft()
 
 
+def repeated(
+    assessment: VisualInventoryAssessment,
+    count: int = 3,
+) -> list[VisualInventoryAssessment]:
+    return [assessment] * count
+
+
 class InventoryWorkflowTest(unittest.TestCase):
     def setUp(self) -> None:
         self.registry = ScenarioRegistry.from_file(REGISTRY_PATH)
 
-    def test_vlm_runs_only_on_case_input_and_move_completion(self) -> None:
+    def build_controller(
+        self,
+        assessments: list[VisualInventoryAssessment],
+    ) -> tuple[VlmInventoryController, StubVisionBackend]:
+        backend = StubVisionBackend(assessments)
+        workflow = InventoryWorkflow(self.registry, StubPromptBuilder(), backend)
+        return VlmInventoryController(workflow), backend
+
+    def feed_three_frames(
+        self,
+        controller: VlmInventoryController,
+        prefix: str,
+        start_time_ns: int,
+    ):
+        self.assertIsNone(controller.update_keyframe(f"{prefix}-1", start_time_ns))
+        self.assertIsNone(controller.update_keyframe(f"{prefix}-2", start_time_ns + 1))
+        return controller.update_keyframe(f"{prefix}-3", start_time_ns + 2)
+
+    def test_each_phase_requires_three_matching_frames(self) -> None:
         all_present = VisualInventoryAssessment(
             present_required_tools=("XRay", "Pill", "Syringe"),
             missing_tools=(),
@@ -49,247 +85,227 @@ class InventoryWorkflowTest(unittest.TestCase):
             missing_tools=(),
             assist_tray_tools=("XRay",),
         )
-        backend = StubVisionBackend([all_present, after_xray])
-        workflow = InventoryWorkflow(self.registry, StubPromptBuilder(), backend)
-        controller = VlmInventoryController(workflow)
+        controller, backend = self.build_controller(
+            repeated(all_present, 6) + repeated(after_xray)
+        )
 
-        controller.update_keyframe("frame-before-case")
+        controller.handle_case_input(PNEUMONIA_CASE, event_time_ns=100)
         self.assertEqual(len(backend.calls), 0)
 
-        initial = controller.handle_case_input(
-            {
-                "patient_id": "PT7A21B",
-                "case_id": "CASE_2026_001",
-                "disease_name": "폐렴",
-            }
+        initial = self.feed_three_frames(controller, "initial", 101)
+        self.assertEqual(initial.kind, "initial_inventory_confirmed")
+        self.assertEqual(initial.result.move_queue, ("XRay", "Pill", "Syringe"))
+        self.assertEqual(len(backend.calls), 3)
+
+        command = self.feed_three_frames(controller, "before-xray", 104)
+        self.assertEqual(command.kind, "move_command")
+        self.assertEqual(command.tool_id, "XRay")
+        self.assertEqual(len(backend.calls), 6)
+
+        controller.handle_move_completed(
+            "XRay",
+            case_id="CASE_2026_001",
+            event_time_ns=200,
         )
-        self.assertEqual(initial.move_queue, ("XRay", "Pill", "Syringe"))
-        self.assertEqual(len(backend.calls), 1)
+        verified = self.feed_three_frames(controller, "after-xray", 201)
+        self.assertEqual(verified.kind, "move_verified")
+        self.assertEqual(verified.result.moved_tools, ("XRay",))
+        self.assertEqual(verified.result.move_queue, ("Pill", "Syringe"))
+        self.assertEqual(len(backend.calls), 9)
 
-        controller.update_keyframe("frame-after-move")
-        self.assertEqual(len(backend.calls), 1)
-
-        after_move = controller.handle_move_completed("XRay")
-        self.assertEqual(after_move.moved_tools, ("XRay",))
-        self.assertEqual(after_move.move_queue, ("Pill", "Syringe"))
-        self.assertEqual(len(backend.calls), 2)
-        self.assertEqual(backend.calls[1][0], "frame-after-move")
-
-    def test_missing_tool_is_skipped_in_move_queue(self) -> None:
-        backend = StubVisionBackend(
-            [
-                VisualInventoryAssessment(
-                    present_required_tools=("XRay", "Syringe"),
-                    missing_tools=("Pill",),
-                    assist_tray_tools=(),
-                )
-            ]
+    def test_inconsistent_frames_stop_and_allow_a_new_three_frame_check(self) -> None:
+        all_present = VisualInventoryAssessment(("Syringe", "Pill"), (), ())
+        pill_missing = VisualInventoryAssessment(("Syringe",), ("Pill",), ())
+        controller, backend = self.build_controller(
+            [all_present, pill_missing, all_present] + repeated(all_present)
         )
-        controller = VlmInventoryController(
-            InventoryWorkflow(self.registry, StubPromptBuilder(), backend)
+        controller.handle_case_input(COLD_CASE)
+
+        controller.update_keyframe("unstable-1")
+        controller.update_keyframe("unstable-2")
+        with self.assertRaisesRegex(InventoryConsensusError, "3개 프레임"):
+            controller.update_keyframe("unstable-3")
+
+        self.assertEqual(controller.phase, "initial_check")
+        confirmed = self.feed_three_frames(controller, "stable", 1)
+        self.assertEqual(confirmed.kind, "initial_inventory_confirmed")
+        self.assertEqual(len(backend.calls), 6)
+
+    def test_pre_move_check_stops_if_queue_head_disappears(self) -> None:
+        all_present = VisualInventoryAssessment(("Syringe", "Pill"), (), ())
+        syringe_missing = VisualInventoryAssessment(("Pill",), ("Syringe",), ())
+        controller, backend = self.build_controller(
+            repeated(all_present)
+            + repeated(syringe_missing)
+            + repeated(all_present)
         )
-        controller.update_keyframe("frame")
+        controller.handle_case_input(COLD_CASE)
+        self.feed_three_frames(controller, "initial", 1)
 
-        result = controller.handle_case_input(
-            {
-                "patient_id": "PT7A21B",
-                "case_id": "CASE_2026_001",
-                "disease_name": "폐렴",
-            }
+        controller.update_keyframe("missing-1")
+        controller.update_keyframe("missing-2")
+        with self.assertRaisesRegex(InventoryWorkflowError, "MainToolTray"):
+            controller.update_keyframe("missing-3")
+
+        self.assertEqual(controller.phase, "pre_move_check")
+        self.assertEqual(controller.current_result.move_queue, ("Syringe", "Pill"))
+
+        command = self.feed_three_frames(controller, "recheck", 10)
+        self.assertEqual(command.kind, "move_command")
+        self.assertEqual(command.tool_id, "Syringe")
+        self.assertEqual(len(backend.calls), 9)
+
+    def test_post_move_check_does_not_commit_until_tool_is_on_assist_tray(self) -> None:
+        all_present = VisualInventoryAssessment(("Syringe", "Pill"), (), ())
+        after_syringe = VisualInventoryAssessment(
+            ("Syringe", "Pill"), (), ("Syringe",)
+        )
+        controller, _ = self.build_controller(
+            repeated(all_present, 9) + repeated(after_syringe)
+        )
+        controller.handle_case_input(COLD_CASE)
+        self.feed_three_frames(controller, "initial", 1)
+        self.feed_three_frames(controller, "before", 4)
+        controller.handle_move_completed("Syringe", case_id="COLD_001")
+
+        controller.update_keyframe("failed-1")
+        controller.update_keyframe("failed-2")
+        with self.assertRaisesRegex(InventoryContractError, "보조 트레이"):
+            controller.update_keyframe("failed-3")
+
+        self.assertEqual(controller.phase, "post_move_check")
+        self.assertEqual(controller.current_result.moved_tools, ())
+        verified = self.feed_three_frames(controller, "retry", 20)
+        self.assertEqual(verified.result.moved_tools, ("Syringe",))
+
+    def test_frames_captured_before_move_completion_are_ignored(self) -> None:
+        all_present = VisualInventoryAssessment(("Syringe", "Pill"), (), ())
+        after_syringe = VisualInventoryAssessment(
+            ("Syringe", "Pill"), (), ("Syringe",)
+        )
+        controller, backend = self.build_controller(
+            repeated(all_present, 6) + repeated(after_syringe)
+        )
+        controller.handle_case_input(COLD_CASE, event_time_ns=100)
+        self.feed_three_frames(controller, "initial", 101)
+        self.feed_three_frames(controller, "before", 104)
+        controller.handle_move_completed(
+            "Syringe",
+            case_id="COLD_001",
+            event_time_ns=200,
         )
 
-        self.assertEqual(result.move_queue, ("XRay", "Syringe"))
-        self.assertEqual(result.missing_tools, ("Pill",))
+        self.assertIsNone(controller.update_keyframe("stale", captured_at_ns=199))
+        self.assertEqual(len(backend.calls), 6)
+        self.assertIsNone(controller.update_keyframe("after-1", captured_at_ns=201))
+        self.assertIsNone(controller.update_keyframe("after-2", captured_at_ns=202))
+        verified = controller.update_keyframe("after-3", captured_at_ns=203)
+        self.assertEqual(verified.kind, "move_verified")
 
-    def test_hand_detection_stops_inventory_inference(self) -> None:
+    def test_move_completion_requires_the_commanded_tool_and_case(self) -> None:
+        all_present = VisualInventoryAssessment(("XRay", "Pill", "Syringe"), (), ())
+        controller, backend = self.build_controller(repeated(all_present, 6))
+        controller.handle_case_input(PNEUMONIA_CASE)
+        self.feed_three_frames(controller, "initial", 1)
+
+        with self.assertRaisesRegex(InventoryWorkflowError, "이동 명령 전"):
+            controller.handle_move_completed("XRay", case_id="CASE_2026_001")
+
+        self.feed_three_frames(controller, "before", 4)
+        with self.assertRaisesRegex(InventoryWorkflowError, "다른 이동 완료"):
+            controller.handle_move_completed("XRay", case_id="OLD_CASE")
+        with self.assertRaisesRegex(InventoryWorkflowError, "명령한 물품과 다른"):
+            controller.handle_move_completed("Pill", case_id="CASE_2026_001")
+        self.assertEqual(len(backend.calls), 6)
+
+    def test_case_cannot_be_replaced_while_a_move_is_unverified(self) -> None:
+        all_present = VisualInventoryAssessment(("Syringe", "Pill"), (), ())
+        controller, _ = self.build_controller(repeated(all_present, 6))
+        controller.handle_case_input(COLD_CASE)
+        self.feed_three_frames(controller, "initial", 1)
+        self.feed_three_frames(controller, "before", 4)
+
+        with self.assertRaisesRegex(InventoryWorkflowError, "새 케이스"):
+            controller.handle_case_input(PNEUMONIA_CASE)
+
+        controller.handle_move_completed("Syringe", case_id="COLD_001")
+        with self.assertRaisesRegex(InventoryWorkflowError, "새 케이스"):
+            controller.handle_case_input(PNEUMONIA_CASE)
+
+    def test_hand_detection_clears_partial_consensus_and_blocks_inference(self) -> None:
         assessment = VisualInventoryAssessment(("Syringe", "Pill"), (), ())
-        backend = StubVisionBackend([assessment])
-        controller = VlmInventoryController(
-            InventoryWorkflow(self.registry, StubPromptBuilder(), backend)
-        )
-        controller.update_keyframe("frame")
+        controller, backend = self.build_controller(repeated(assessment))
+        controller.handle_case_input(COLD_CASE)
+        controller.update_keyframe("before-hand")
         controller.update_hand_detection(True)
 
         with self.assertRaisesRegex(InventoryWorkflowError, "손이 감지"):
-            controller.handle_case_input(
-                {
-                    "patient_id": "P1COLD01",
-                    "case_id": "COLD_001",
-                    "disease_name": "감기",
-                }
-            )
+            controller.update_keyframe("hand-present")
         self.assertEqual(len(backend.calls), 0)
 
-    def test_move_completion_requires_latest_keyframe_and_queued_tool(self) -> None:
-        all_present = VisualInventoryAssessment(
-            present_required_tools=("Syringe", "Pill"),
-            missing_tools=(),
-            assist_tray_tools=(),
-        )
-        controller = VlmInventoryController(
-            InventoryWorkflow(
-                self.registry,
-                StubPromptBuilder(),
-                StubVisionBackend([all_present]),
-            )
-        )
+        controller.update_hand_detection(False)
+        self.assertIsNone(controller.update_keyframe("clear-1"))
+        self.assertIsNone(controller.update_keyframe("clear-2"))
+        event = controller.update_keyframe("clear-3")
+        self.assertEqual(event.kind, "initial_inventory_confirmed")
 
-        with self.assertRaisesRegex(InventoryWorkflowError, "대표 프레임"):
-            controller.handle_case_input(
-                {
-                    "patient_id": "P1COLD01",
-                    "case_id": "COLD_001",
-                    "disease_name": "감기",
-                }
-            )
-
-        controller.update_keyframe("frame")
-        controller.handle_case_input(
-            {
-                "patient_id": "P1COLD01",
-                "case_id": "COLD_001",
-                "disease_name": "감기",
-            }
-        )
-        with self.assertRaisesRegex(InventoryWorkflowError, "새로운 대표 프레임"):
-            controller.handle_move_completed("Syringe")
-
-        controller.update_keyframe("frame-after-invalid-move")
-        with self.assertRaisesRegex(InventoryWorkflowError, "이동 순서"):
-            controller.handle_move_completed("XRay")
-
-    def test_move_completion_rejects_a_later_queue_item(self) -> None:
-        assessment = VisualInventoryAssessment(("XRay", "Pill", "Syringe"), (), ())
-        backend = StubVisionBackend([assessment])
-        controller = VlmInventoryController(
-            InventoryWorkflow(self.registry, StubPromptBuilder(), backend)
-        )
-        controller.update_keyframe("initial")
-        controller.handle_case_input(
-            {
-                "patient_id": "PT7A21B",
-                "case_id": "CASE_2026_001",
-                "disease_name": "폐렴",
-            }
-        )
-        controller.update_keyframe("after-wrong-move")
-
-        with self.assertRaisesRegex(InventoryWorkflowError, "이동 순서"):
-            controller.handle_move_completed("Pill", case_id="CASE_2026_001")
-        self.assertEqual(len(backend.calls), 1)
-
-    def test_report_lists_required_moved_and_missing_tools(self) -> None:
-        initial_assessment = VisualInventoryAssessment(
-            present_required_tools=("XRay", "Syringe"),
-            missing_tools=("Pill",),
-            assist_tray_tools=(),
-        )
-        moved_assessment = VisualInventoryAssessment(
-            present_required_tools=("XRay", "Syringe"),
-            missing_tools=("Pill",),
-            assist_tray_tools=("XRay",),
-        )
-        controller = VlmInventoryController(
-            InventoryWorkflow(
-                self.registry,
-                StubPromptBuilder(),
-                StubVisionBackend([initial_assessment, moved_assessment]),
-            )
-        )
-        controller.update_keyframe("initial")
-        controller.handle_case_input(
-            {
-                "patient_id": "PT7A21B",
-                "case_id": "CASE_2026_001",
-                "disease_name": "폐렴",
-            }
-        )
-        controller.update_keyframe("after-xray")
-        controller.handle_move_completed("XRay")
-
-        report = controller.build_session_report()
-
-        self.assertEqual(report["required_tools"], ["XRay", "Pill", "Syringe"])
-        self.assertEqual(report["moved_tools"], ["XRay"])
-        self.assertEqual(report["missing_tools"], ["Pill"])
-        self.assertEqual(report["disease_name"], "폐렴")
-        self.assertIn("X-ray를 옮겼으며", report["message"])
-        self.assertIn("알약은 트레이에 없어", report["message"])
-
-    def test_move_is_rejected_when_tool_remains_on_main_tray(self) -> None:
+    def test_frames_from_before_hand_clear_are_ignored(self) -> None:
         assessment = VisualInventoryAssessment(("Syringe", "Pill"), (), ())
-        backend = StubVisionBackend([assessment, assessment])
-        controller = VlmInventoryController(
-            InventoryWorkflow(self.registry, StubPromptBuilder(), backend)
-        )
-        controller.update_keyframe("initial")
-        controller.handle_case_input(
-            {"patient_id": "P1COLD01", "case_id": "COLD_001", "disease_name": "감기"}
-        )
-        controller.update_keyframe("failed-move")
+        controller, backend = self.build_controller(repeated(assessment))
+        controller.handle_case_input(COLD_CASE, event_time_ns=100)
+        controller.update_hand_detection(True, event_time_ns=110)
+        controller.update_hand_detection(False, event_time_ns=120)
 
-        with self.assertRaisesRegex(InventoryContractError, "보조 트레이"):
-            controller.handle_move_completed("Syringe")
+        self.assertIsNone(controller.update_keyframe("stale", captured_at_ns=119))
+        self.feed_three_frames(controller, "clear", 121)
 
-    def test_failed_replacement_clears_previous_case(self) -> None:
-        assessment = VisualInventoryAssessment(("Syringe", "Pill"), (), ())
-        workflow = InventoryWorkflow(
-            self.registry,
-            StubPromptBuilder(),
-            StubVisionBackend([assessment]),
-        )
-        workflow.start_case(
-            {"patient_id": "P1COLD01", "case_id": "COLD_001", "disease_name": "감기"},
-            "frame",
-        )
+        self.assertEqual(len(backend.calls), 3)
 
-        with self.assertRaises(ValueError):
-            workflow.start_case(
-                {"patient_id": "P2COLD02", "case_id": "COLD_002", "disease_name": "장염"},
-                "frame",
-            )
-        with self.assertRaisesRegex(InventoryWorkflowError, "활성화된"):
-            workflow.complete_move("Syringe", "frame")
-
-    def test_delayed_completion_from_another_case_is_rejected(self) -> None:
-        assessment = VisualInventoryAssessment(("Syringe", "Pill"), (), ())
-        controller = VlmInventoryController(
-            InventoryWorkflow(self.registry, StubPromptBuilder(), StubVisionBackend([assessment]))
-        )
-        controller.update_keyframe("initial")
-        controller.handle_case_input(
-            {"patient_id": "P1COLD01", "case_id": "COLD_001", "disease_name": "감기"}
-        )
-        controller.update_keyframe("after-move")
-
-        with self.assertRaisesRegex(InventoryWorkflowError, "다른 이동 완료"):
-            controller.handle_move_completed("Syringe", case_id="COLD_OLD")
-
-    def test_completed_session_keeps_ordered_moved_tools(self) -> None:
+    def test_completed_session_repeats_pre_and_post_checks_for_each_tool(self) -> None:
         initial = VisualInventoryAssessment(("Syringe", "Pill"), (), ())
         after_syringe = VisualInventoryAssessment(
             ("Syringe", "Pill"), (), ("Syringe",)
         )
-        after_pill = VisualInventoryAssessment(
-            ("Pill",), ("Syringe",), ("Pill",)
+        before_pill = VisualInventoryAssessment(("Pill",), ("Syringe",), ())
+        after_pill = VisualInventoryAssessment(("Pill",), ("Syringe",), ("Pill",))
+        controller, backend = self.build_controller(
+            repeated(initial, 6)
+            + repeated(after_syringe)
+            + repeated(before_pill)
+            + repeated(after_pill)
         )
-        backend = StubVisionBackend([initial, after_syringe, after_pill])
-        controller = VlmInventoryController(
-            InventoryWorkflow(self.registry, StubPromptBuilder(), backend)
-        )
-        controller.update_keyframe("initial")
-        controller.handle_case_input(
-            {"patient_id": "P1COLD01", "case_id": "COLD_001", "disease_name": "감기"}
-        )
-        controller.update_keyframe("after-syringe")
+        controller.handle_case_input(COLD_CASE)
+        self.feed_three_frames(controller, "initial", 1)
+        first_command = self.feed_three_frames(controller, "before-syringe", 4)
+        self.assertEqual(first_command.tool_id, "Syringe")
         controller.handle_move_completed("Syringe", case_id="COLD_001")
-        controller.update_keyframe("after-pill")
-        result = controller.handle_move_completed("Pill", case_id="COLD_001")
+        first_verified = self.feed_three_frames(controller, "after-syringe", 7)
+        self.assertEqual(first_verified.result.move_queue, ("Pill",))
 
-        self.assertEqual(result.status, "completed")
-        self.assertEqual(result.move_queue, ())
-        self.assertEqual(result.moved_tools, ("Syringe", "Pill"))
-        self.assertEqual(len(backend.calls), 3)
+        second_command = self.feed_three_frames(controller, "before-pill", 10)
+        self.assertEqual(second_command.tool_id, "Pill")
+        controller.handle_move_completed("Pill", case_id="COLD_001")
+        completed = self.feed_three_frames(controller, "after-pill", 13)
+
+        self.assertEqual(completed.kind, "session_completed")
+        self.assertEqual(completed.result.status, "completed")
+        self.assertEqual(completed.result.move_queue, ())
+        self.assertEqual(completed.result.moved_tools, ("Syringe", "Pill"))
+        self.assertEqual(controller.phase, "completed")
+        self.assertEqual(len(backend.calls), 15)
+
+    def test_report_uses_last_committed_inventory_state(self) -> None:
+        initial = VisualInventoryAssessment(("XRay", "Syringe"), ("Pill",), ())
+        controller, _ = self.build_controller(repeated(initial))
+        controller.handle_case_input(PNEUMONIA_CASE)
+        self.feed_three_frames(controller, "initial", 1)
+
+        report = controller.build_session_report()
+
+        self.assertEqual(report["required_tools"], ["XRay", "Pill", "Syringe"])
+        self.assertEqual(report["moved_tools"], [])
+        self.assertEqual(report["missing_tools"], ["Pill"])
+        self.assertEqual(report["disease_name"], "폐렴")
 
 
 if __name__ == "__main__":

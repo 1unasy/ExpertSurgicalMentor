@@ -10,14 +10,20 @@
 환자 ID·질환 입력
         -> Scenario Registry에서 required_tools 확정
         -> YOLO Safety Controller가 트레이 영역의 손 감지
-        -> VLM이 MainToolTray·AssistTray의 물품 확인
+        -> VLM이 최초 3프레임에서 MainToolTray·AssistTray의 물품 확인
         -> 규칙 기반 코드가 move_queue 생성
+        -> 대기열 첫 물품이 MainToolTray에 있는지 새 3프레임으로 재확인
+        -> 3회 판단이 모두 일치한 경우에만 로봇 이동 명령 발행
         -> 로봇이 MainToolTray에서 AssistTray로 물품 이동
-        -> VLM이 이번 이동 물품을 AssistTray에서 재확인
+        -> 이동 완료 이벤트 이후 새 3프레임에서 AssistTray 이동 결과 확인
+        -> 3회 판단이 모두 일치한 경우에만 moved 갱신
+        -> 다음 물품에 대해 수행 전·후 확인 반복
         -> 필요한 물품·옮긴 물품·없는 물품 리포트 생성
 ```
 
 YOLO는 현재 물품을 인식하지 않고 손의 트레이 진입 여부만 감지한다. VLM은 물품과 트레이 위치를 판정하지만 로봇 좌표나 파지점을 생성하지 않는다. `move_queue`와 이동 이력은 모델 출력에 맡기지 않고 코드에서 검증해 관리한다.
+
+각 확인 단계는 해당 단계가 시작된 뒤 촬영된 대표 프레임 3장만 사용한다. 세 VLM 결과의 존재·누락·트레이 위치가 모두 일치해야 다음 상태로 진행한다. 불일치하거나 현재 물품을 수행 전 MainToolTray 또는 수행 후 AssistTray에서 확인하지 못하면 프레임 묶음을 폐기하고 같은 단계에서 다시 3장을 받는다. 손이 감지되면 수집 중인 프레임도 즉시 폐기한다.
 
 ## 저장소 구조
 
@@ -87,9 +93,10 @@ VLM·YOLO·로봇이 공통으로 사용할 도메인 계약과 각 기능 모�
 | `model_loader.py` | 선택한 Qwen 모델 하나를 bitsandbytes NF4 4-bit로 지연 로딩한다. 학습이나 가중치 변경은 수행하지 않는다. |
 | `prompt.py` | 고정 system prompt와 환자·시나리오·`verification_tool` JSON을 Qwen 입력으로 조립한다. |
 | `backend.py` | 이미지와 프롬프트를 Qwen chat template에 넣고 모델의 JSON 텍스트를 파싱한다. |
+| `consensus.py` | 연속 3프레임의 물품 존재·누락·트레이 위치가 모두 일치하는지 검증한다. |
 | `inventory.py` | VLM 원시 출력의 필드·물품 목록을 검증하고 `move_queue`, `missing_tools`, `moved_tools`를 결정한다. |
 | `reporting.py` | 최종 인벤토리 상태를 한국어 세션 리포트와 JSON으로 변환한다. |
-| `node.py` | 환자 입력과 이동 완료 이벤트에서만 VLM을 실행하는 워크플로 및 선택적 ROS 2 노드를 제공한다. |
+| `node.py` | 최초 확인·수행 전 확인·수행 후 확인의 3프레임 합의 상태 머신과 선택적 ROS 2 노드를 제공한다. |
 
 ### `scripts/`
 
@@ -146,8 +153,18 @@ ROS 2 노드는 다음 인터페이스를 사용한다.
 | 구독 | `/case/input` | `patient_id`, `case_id`, `disease_name` JSON |
 | 구독 | `/robot/move_completed` | `case_id`, `tool_id` JSON |
 | 발행 | `/inventory/state` | 필요·존재·누락·이동 대기·이동 완료 물품 |
+| 발행 | `/robot/move_command` | 수행 전 3프레임 확인을 통과한 `case_id`, `tool_id` JSON |
 | 발행 | `/session/report` | 최종 세션 리포트 |
 | 발행 | `/inventory/error` | 입력·모델 출력·이벤트 순서 오류 |
+
+ROS 2 실행 순서는 다음과 같다.
+
+1. `/case/input`을 수신하면 이전 프레임을 폐기하고 `initial_check`를 시작한다.
+2. 이후 `/camera/keyframe` 3장의 결과가 일치하면 초기 `move_queue`를 발행한다.
+3. 새 프레임 3장에서 대기열 첫 물품이 MainToolTray에 있으면 `/robot/move_command`를 발행한다.
+4. 로봇은 이동을 마친 뒤 `/robot/move_completed`를 발행한다.
+5. 완료 이벤트 이후 촬영된 새 프레임 3장에서 물품이 AssistTray에 있으면 `moved_tools`와 `move_queue`를 갱신한다.
+6. 대기열이 남아 있으면 3번부터 반복하고, 없으면 `/session/report`를 발행한다.
 
 ## 테스트
 
@@ -172,9 +189,10 @@ expert_surgical_mentor/
 통합 실행기는 모델을 서로 직접 호출하게 만들지 않고 다음 순서를 조정한다.
 
 1. YOLO 손 감지가 안전 상태인지 확인한다.
-2. VLM 결과에서 코드가 생성한 `move_queue`의 첫 물품을 선택한다.
-3. `robot/`의 정책 라우터가 해당 물품의 ACT 모델을 불러와 한 번 이동한다.
-4. 이동 완료 후 새 카메라 프레임으로 VLM 검증을 수행한다.
-5. 성공한 경우에만 다음 물품으로 진행한다.
+2. 최초 VLM 3프레임 합의로 코드가 `move_queue`를 생성한다.
+3. 다음 물품을 새 3프레임에서 MainToolTray에 확인한 뒤에만 이동 명령을 발행한다.
+4. `robot/`의 정책 라우터가 해당 물품의 ACT 모델을 불러와 한 번 이동한다.
+5. 이동 완료 이벤트 이후 새 3프레임에서 AssistTray 이동 결과를 확인한다.
+6. 성공한 경우에만 `moved_tools`에 추가하고 다음 물품으로 진행한다.
 
 물체별 30개 모방학습 평가에서 파지 정확도가 부족하면 확장 단계에서만 물품 검출용 YOLO를 추가하고, 그 위치 결과를 ACT 정책 입력 보정에 사용한다.

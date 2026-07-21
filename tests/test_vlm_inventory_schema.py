@@ -221,6 +221,7 @@ class PromptBuilderTest(unittest.TestCase):
         self.assertIn("[해야 할 것]", prompt.system_text)
         self.assertIn("[하지 말아야 할 것]", prompt.system_text)
         self.assertIn("물품을 인식하지 않는다", prompt.system_text)
+        self.assertIn("연속 3프레임", prompt.system_text)
         runtime = json.loads(prompt.user_text)
         self.assertEqual(runtime["required_tools"], ["XRay", "Pill", "Syringe"])
         self.assertIsNone(runtime["verification_tool"])
