@@ -2,9 +2,11 @@
 
 ## 1. 목적
 
-로봇 작업 영역에 사람 손이 들어오는 상황을 front/wrist 카메라에서 감지하기 위해
-YOLO11n 단일 클래스 객체 감지 모델을 학습했다. 현재 모델은 손을 감지하고 화면에 박스를
-표시할 수 있지만, 손 감지 결과를 로봇 정지 신호에 연결하는 기능은 아직 별도 구현이 필요하다.
+로봇 작업 영역에 사람 손이 들어오는 상황을 front 카메라에서 감지하기 위해
+YOLO11n 단일 클래스 객체 감지 모델을 학습했다. wrist 카메라는 사각지대·그리퍼 방해로
+안전 검출에서 제외했다 (`docs/hand_safety_dataset.md` §1 참조). 현재 모델은 손을 감지하고
+화면에 박스를 표시할 수 있지만, 손 감지 결과를 로봇 정지 신호에 연결하는 기능은 아직
+별도 구현이 필요하다.
 
 ## 2. 데이터셋
 
@@ -12,10 +14,10 @@ YOLO11n 단일 클래스 객체 감지 모델을 학습했다. 현재 모델은 
 datasets/hand/yolo_v1/hospital.yolov11
 ```
 
-| 분할 | 이미지 | 손 박스 |
-|---|---:|---:|
-| train | 120 | 데이터셋 라벨 참조 |
-| valid | 30 | 18 |
+| 분할 | 이미지 | 손 박스 | Null (배경) |
+|---|---:|---:|---:|
+| train | 120 | 88 (86장에 분산, 2장은 두 손) | 34 |
+| valid | 30 | 18 (18장 각 1개) | 12 (N1 3 / N2 3 / N3 6) |
 
 클래스는 하나다.
 
@@ -110,6 +112,14 @@ outputs/train/hand_yolo_v1/weights/best.pt
 오탐: 0
 ```
 
+배경 이미지(N* 12장) 세부 검증:
+
+```text
+N1 빈 씬 (3장):        오탐 0
+N2 도구/트레이 (3장):   오탐 0
+N3 로봇 팔/그리퍼 (6장): 오탐 0   ← 그리퍼 오탐 방지 목표 달성
+```
+
 놓친 이미지:
 
 ```text
@@ -138,7 +148,8 @@ yolo detect predict \
 
 ## 7. 실시간 카메라 테스트
 
-다른 LeRobot/OpenCV 프로그램이 카메라를 점유하지 않은 상태에서 실행한다.
+안전 검출은 front 카메라 단독으로 운영한다. 다른 LeRobot/OpenCV 프로그램이 카메라를
+점유하지 않은 상태에서 실행한다.
 
 Front 카메라(`/dev/video4`):
 
@@ -149,19 +160,6 @@ cd ~/ExpertSurgicalMentor
 yolo detect predict \
   model=outputs/train/hand_yolo_v1/weights/best.pt \
   source=4 \
-  imgsz=640 \
-  conf=0.15 \
-  device=0 \
-  show=true \
-  save=false
-```
-
-Wrist 카메라(`/dev/video2`):
-
-```bash
-yolo detect predict \
-  model=outputs/train/hand_yolo_v1/weights/best.pt \
-  source=2 \
   imgsz=640 \
   conf=0.15 \
   device=0 \
