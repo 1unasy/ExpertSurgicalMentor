@@ -8,6 +8,12 @@ VENV_DIR="${VENV_DIR:-$HOME/venv/il}"
 HF_USER="${HF_USER:-1unasy}"
 ROBOT_PORT="${ROBOT_PORT:-/dev/ttyACM0}"
 START_POSE_PATH="${START_POSE_PATH:-$PROJECT_ROOT/config/omx_start_pose.json}"
+MODEL_PREFIX="${MODEL_PREFIX:-act_v2}"
+SAFETY_YOLO_MODEL="${SAFETY_YOLO_MODEL:-$PROJECT_ROOT/outputs/train/hand_yolo_v1/weights/best.pt}"
+SAFETY_CONF="${SAFETY_CONF:-0.15}"
+SAFETY_CLEAR_S="${SAFETY_CLEAR_S:-10}"
+SAFETY_CAMERA="${SAFETY_CAMERA:-front}"
+SAFETY_DEVICE="${SAFETY_DEVICE:-0}"
 
 EPISODES=1
 EPISODE_TIME_S=15
@@ -29,14 +35,19 @@ Options:
   --reset-time SEC      Manual scene reset time between episodes (default: 10)
   --return-time SEC     Automatic start-pose return duration (default: 5)
   --action-steps N      ACT actions executed before replanning (default: 20)
+  --safety-clear SEC    Continuous no-hand time before resuming (default: 10)
+  --safety-conf VALUE   YOLO hand confidence threshold (default: 0.15)
+  --no-safety           Disable YOLO hand safety (not recommended)
   -h, --help            Show this help
 
 Environment overrides:
-  ROBOT_PORT, START_POSE_PATH, HF_USER, PROJECT_ROOT, LEROBOT_DIR, VENV_DIR
+  ROBOT_PORT, START_POSE_PATH, MODEL_PREFIX, HF_USER, PROJECT_ROOT, LEROBOT_DIR, VENV_DIR
+  SAFETY_YOLO_MODEL, SAFETY_CONF, SAFETY_CLEAR_S, SAFETY_CAMERA, SAFETY_DEVICE
 
 Examples:
   ./scripts/run_act_object.sh syringe
   ./scripts/run_act_object.sh syringe --episodes 10
+  ./scripts/run_act_object.sh syringe --episodes 10 --safety-clear 10 --safety-conf 0.15
   ./scripts/run_act_object.sh syringe --action-steps 30
   ROBOT_PORT=/dev/omx_follower ./scripts/run_act_object.sh pill
 EOF
@@ -77,6 +88,18 @@ while [[ $# -gt 0 ]]; do
       ACTION_STEPS="${2:?--action-steps requires a value}"
       shift 2
       ;;
+    --safety-clear)
+      SAFETY_CLEAR_S="${2:?--safety-clear requires a value}"
+      shift 2
+      ;;
+    --safety-conf)
+      SAFETY_CONF="${2:?--safety-conf requires a value}"
+      shift 2
+      ;;
+    --no-safety)
+      SAFETY_YOLO_MODEL=""
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -99,13 +122,18 @@ if ! [[ "$ACTION_STEPS" =~ ^[1-9][0-9]*$ ]] || (( ACTION_STEPS > 100 )); then
   exit 2
 fi
 
-for value_name in EPISODE_TIME_S RESET_TIME_S RETURN_TIME_S; do
+for value_name in EPISODE_TIME_S RESET_TIME_S RETURN_TIME_S SAFETY_CLEAR_S; do
   value="${!value_name}"
   if ! [[ "$value" =~ ^[0-9]+([.][0-9]+)?$ ]] || [[ "$value" == "0" ]]; then
     echo "ERROR: ${value_name} must be a positive number." >&2
     exit 2
   fi
 done
+
+if ! [[ "$SAFETY_CONF" =~ ^(0([.][0-9]+)?|1([.]0+)?)$ ]]; then
+  echo "ERROR: --safety-conf must be a number between 0 and 1." >&2
+  exit 2
+fi
 
 case "${OBJECT_INPUT,,}" in
   syringe)
@@ -151,7 +179,12 @@ if [[ ! -f "$START_POSE_PATH" ]]; then
   exit 1
 fi
 
-MODEL_PATH="$LEROBOT_DIR/outputs/train/act_${OBJECT}/checkpoints/last/pretrained_model"
+if [[ -n "$SAFETY_YOLO_MODEL" && ! -f "$SAFETY_YOLO_MODEL" ]]; then
+  echo "ERROR: YOLO hand model not found: $SAFETY_YOLO_MODEL" >&2
+  exit 1
+fi
+
+MODEL_PATH="$LEROBOT_DIR/outputs/train/${MODEL_PREFIX}_${OBJECT}/checkpoints/last/pretrained_model"
 if [[ ! -d "$MODEL_PATH" ]]; then
   echo "ERROR: Trained model not found: $MODEL_PATH" >&2
   exit 1
@@ -170,11 +203,27 @@ echo "Robot port:   $ROBOT_PORT"
 echo "Start pose:   $START_POSE_PATH"
 echo "Episodes:     $EPISODES"
 echo "Action steps: $ACTION_STEPS"
+if [[ -n "$SAFETY_YOLO_MODEL" ]]; then
+  echo "Hand safety:  enabled (YOLO conf=$SAFETY_CONF, clear=${SAFETY_CLEAR_S}s, camera=$SAFETY_CAMERA)"
+else
+  echo "Hand safety:  DISABLED"
+fi
 echo "Eval dataset: $EVAL_REPO_ID"
 echo
 echo "The follower will move to the configured start pose before inference."
 
 cd "$LEROBOT_DIR"
+
+SAFETY_ARGS=()
+if [[ -n "$SAFETY_YOLO_MODEL" ]]; then
+  SAFETY_ARGS+=(
+    --safety_yolo_model_path="$SAFETY_YOLO_MODEL"
+    --safety_yolo_confidence="$SAFETY_CONF"
+    --safety_yolo_clear_s="$SAFETY_CLEAR_S"
+    --safety_yolo_camera="$SAFETY_CAMERA"
+    --safety_yolo_device="$SAFETY_DEVICE"
+  )
+fi
 
 exec lerobot-record \
   --robot.type=omx_follower \
@@ -196,4 +245,5 @@ exec lerobot-record \
   --dataset.reset_time_s="$RESET_TIME_S" \
   --dataset.push_to_hub=false \
   --policy.path="$MODEL_PATH" \
-  --policy.n_action_steps="$ACTION_STEPS"
+  --policy.n_action_steps="$ACTION_STEPS" \
+  "${SAFETY_ARGS[@]}"
