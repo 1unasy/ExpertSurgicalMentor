@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# Train YOLOv8n for hand-safety detection.
+# Train YOLOv11n for hand-safety detection.
 #
 # Dataset:  datasets/hand/yolo_v1/hospital.yolov11/  (Roboflow export)
 # Output:   outputs/train/${RUN_NAME}/weights/best.pt
 #
 # Env vars (all optional):
-#   MODEL      base checkpoint (default: yolov8n.pt)
+#   MODEL      base checkpoint (default: yolo11n.pt; ultralytics auto-downloads)
 #   EPOCHS     training epochs (default: 100)
 #   BATCH      batch size (default: 16; try 8 on Mac MPS if OOM)
 #   IMGSZ      input image size (default: 640, matches Roboflow export)
@@ -20,7 +20,7 @@ set -Eeuo pipefail
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-MODEL="${MODEL:-yolov8n.pt}"
+MODEL="${MODEL:-yolo11n.pt}"
 EPOCHS="${EPOCHS:-100}"
 BATCH="${BATCH:-16}"
 IMGSZ="${IMGSZ:-640}"
