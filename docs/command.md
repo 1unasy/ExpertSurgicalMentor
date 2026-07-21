@@ -260,6 +260,80 @@ cd ~/ExpertSurgicalMentor/src/lerobot && lerobot-edit-dataset \
 1unasy/pick_and_place_v2_pill
 ```
 
+### 40개 syringe 데이터의 train/valid/test 분할
+
+물체별 40개 데이터는 다음처럼 `28/6/6`으로 분할한다. 비율 기반 split은 에피소드를
+앞에서부터 순서대로 자르므로, 아래 스크립트는 수집 순서 전체에서 valid/test를 고르게
+선택한다.
+
+```bash
+cd ~/ExpertSurgicalMentor
+
+./scripts/split_lerobot_40.sh pick_and_place_v2_syringe
+```
+
+생성 결과:
+
+```text
+1unasy/pick_and_place_v2_syringe_train   # 28 episodes
+1unasy/pick_and_place_v2_syringe_valid   #  6 episodes
+1unasy/pick_and_place_v2_syringe_test    #  6 episodes
+```
+
+기존 분할 폴더가 있으면 스크립트는 덮어쓰지 않고 종료한다. ACT 학습에는 `_train`만
+사용하고, `_valid`는 체크포인트 선택에, `_test`는 최종 모델을 한 번 평가할 때 사용한다.
+현재 `lerobot-train`의 `eval_freq`는 이 offline valid 데이터셋을 자동 평가하는 옵션이
+아니므로 valid/test 성공률은 실제 로봇에서 같은 시작 조건으로 별도 기록한다.
+
+분할된 28개 train 에피소드만 사용해 별도 출력 폴더로 학습하려면:
+
+```bash
+cd ~/ExpertSurgicalMentor
+
+DATASET_SPLIT=train \
+OUTPUT_PREFIX=act_v2_split \
+STEPS=20000 \
+BATCH_SIZE=8 \
+./scripts/train_act_objects.sh syringe
+```
+
+40개 분할부터 syringe 100,000 step 학습까지 한 번에 수행:
+
+```bash
+cd ~/ExpertSurgicalMentor
+./scripts/split_train_syringe_100k.sh
+```
+
+기본 출력은 `src/lerobot/outputs/train/act_v2_split100k_syringe`이며 10,000 step마다
+체크포인트를 저장한다. `--wait-for-pid PID --tmux-target 0:0.0` 옵션은 현재 tmux
+foreground 학습 PID가 끝난 뒤 같은 pane에 위 명령을 자동으로 전달할 때 사용한다.
+
+### Syringe와 pill 분할 및 100,000 step 순차 학습
+
+각 물체의 40개 에피소드를 `train 28 / valid 6 / test 6`으로 나눈 뒤 train split만
+사용하여 syringe, pill 순서로 학습한다.
+
+```bash
+cd ~/ExpertSurgicalMentor
+./scripts/split_train_act_objects_100k.sh syringe pill
+```
+
+현재 학습 PID가 종료됐는지 30분마다 확인하고, 종료 후 tmux `0:0.0`에서 자동 시작:
+
+```bash
+cd ~/ExpertSurgicalMentor
+
+nohup ./scripts/split_train_act_objects_100k.sh \
+  --wait-for-pid CURRENT_TRAIN_PID \
+  --tmux-target 0:0.0 \
+  syringe pill \
+  > /tmp/esm_act_objects_100k_queue.log 2>&1 &
+```
+
+`valid`는 체크포인트 선택용, `test`는 최종 평가용으로 남겨 둔다. 현재 LeRobot ACT
+학습 명령은 offline valid/test를 자동 평가하지 않으므로 실제 로봇 성공률을 각 split의
+초기 배치 조건에 맞춰 별도로 기록한다.
+
 확인:
 
 ```bash
