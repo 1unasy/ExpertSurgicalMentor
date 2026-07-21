@@ -20,6 +20,32 @@ runs/
 # robot PC can pull them for training.
 datasets/hand/raw/
 
+# Ultralytics dataset index caches are machine-local and regenerated automatically.
+*.cache
+
+# Keep the compact, deployable hand-safety model and its key training report.
+# Other experiment outputs, last.pt, batch previews, and prediction runs stay ignored.
+!outputs/
+outputs/*
+!outputs/train/
+outputs/train/*
+!outputs/train/hand_yolo_v1/
+outputs/train/hand_yolo_v1/*
+!outputs/train/hand_yolo_v1/args.yaml
+!outputs/train/hand_yolo_v1/results.csv
+!outputs/train/hand_yolo_v1/results.png
+!outputs/train/hand_yolo_v1/BoxF1_curve.png
+!outputs/train/hand_yolo_v1/BoxP_curve.png
+!outputs/train/hand_yolo_v1/BoxPR_curve.png
+!outputs/train/hand_yolo_v1/BoxR_curve.png
+!outputs/train/hand_yolo_v1/confusion_matrix.png
+!outputs/train/hand_yolo_v1/confusion_matrix_normalized.png
+!outputs/train/hand_yolo_v1/val_batch0_labels.jpg
+!outputs/train/hand_yolo_v1/val_batch0_pred.jpg
+!outputs/train/hand_yolo_v1/weights/
+outputs/train/hand_yolo_v1/weights/*
+!outputs/train/hand_yolo_v1/weights/best.pt
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

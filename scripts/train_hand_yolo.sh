@@ -29,6 +29,10 @@ DEVICE="${DEVICE:-}"
 RUN_NAME="${RUN_NAME:-hand_yolo_v1}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-outputs/train}"
 
+if [[ "$OUTPUT_ROOT" != /* ]]; then
+  OUTPUT_ROOT="$PROJECT_ROOT/$OUTPUT_ROOT"
+fi
+
 DATASET_ROOT="$PROJECT_ROOT/datasets/hand/yolo_v1/hospital.yolov11"
 
 if [[ ! -d "$DATASET_ROOT/train/images" || ! -d "$DATASET_ROOT/valid/images" ]]; then
@@ -46,8 +50,9 @@ fi
 # Ultralytics resolves relative paths in data.yaml via its own settings; using an
 # absolute-path yaml generated at run time avoids surprises from Roboflow's
 # ../train/images defaults and renames the class from 'hospital' to 'hand'.
-DATA_YAML="$(mktemp -t hand_data.XXXXXX 2>/dev/null || mktemp)"
-trap 'rm -f "$DATA_YAML"' EXIT
+DATA_TMP_DIR="$(mktemp -d -t hand_data.XXXXXX 2>/dev/null || mktemp -d)"
+DATA_YAML="$DATA_TMP_DIR/data.yaml"
+trap 'rm -rf "$DATA_TMP_DIR"' EXIT
 
 cat > "$DATA_YAML" <<EOF
 path: $DATASET_ROOT
