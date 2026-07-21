@@ -5,8 +5,6 @@ This script performs inference only. It does not train or modify model weights.
 Expected image names are <case_id>.jpg, .jpeg, or .png inside --image-dir.
 """
 
-from __future__ import annotations
-
 import argparse
 import gc
 import importlib
@@ -20,11 +18,11 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from expert_surgical_mentor.case_validation import validate_case_payload
-from expert_surgical_mentor.inventory_schema import InventoryResult
-from expert_surgical_mentor.model_loader import ModelCatalog, QuantizedVlmLoader
-from expert_surgical_mentor.prompt_builder import InventoryPromptBuilder
 from expert_surgical_mentor.scenario_registry import ScenarioRegistry
-from expert_surgical_mentor.vlm_backend import QwenVisionInventoryBackend
+from expert_surgical_mentor.vlm.backend import QwenVisionInventoryBackend
+from expert_surgical_mentor.vlm.inventory import InventoryResult
+from expert_surgical_mentor.vlm.model_loader import ModelCatalog, QuantizedVlmLoader
+from expert_surgical_mentor.vlm.prompt import InventoryPromptBuilder
 
 
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")

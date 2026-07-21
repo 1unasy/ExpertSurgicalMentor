@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """OMX-Follower keyboard teleop (python3)."""
 
-from __future__ import annotations
-
 import argparse
 import select
 import sys
@@ -68,7 +66,7 @@ KEY_BINDINGS = {
 }
 
 
-def _build_bus(port: str) -> DynamixelMotorsBus:
+def _build_bus(port: str) -> "DynamixelMotorsBus":
     Motor, MotorNormMode, _, DynamixelMotorsBus, _ = _get_dxl_symbols()
     return DynamixelMotorsBus(
         port=port,

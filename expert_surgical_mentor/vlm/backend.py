@@ -1,13 +1,11 @@
 """Inference adapter for Qwen-family inventory VLMs."""
 
-from __future__ import annotations
-
 import importlib
 from typing import Protocol
 
-from .inventory_schema import VisualInventoryAssessment
+from .inventory import VisualInventoryAssessment
 from .model_loader import LoadedVlm, ModelDependencyError
-from .prompt_builder import InventoryPrompt
+from .prompt import InventoryPrompt
 
 
 class VisionInventoryBackend(Protocol):

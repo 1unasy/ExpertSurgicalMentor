@@ -1,19 +1,17 @@
 """Event-driven inventory workflow invoked at case start and move completion."""
 
-from __future__ import annotations
-
 import argparse
 import json
 from collections.abc import Mapping
 from pathlib import Path
 
-from .case_validation import CaseInput, UnsupportedDiseaseError, validate_case_payload
-from .inventory_schema import InventoryResult
+from ..case_validation import CaseInput, UnsupportedDiseaseError, validate_case_payload
+from ..scenario_registry import Scenario, ScenarioRegistry
+from .backend import QwenVisionInventoryBackend, VisionInventoryBackend
+from .inventory import InventoryResult
 from .model_loader import ModelCatalog, ModelDependencyError, QuantizedVlmLoader
-from .prompt_builder import InventoryPromptBuilder
+from .prompt import InventoryPromptBuilder
 from .reporting import build_session_report
-from .scenario_registry import Scenario, ScenarioRegistry
-from .vlm_backend import QwenVisionInventoryBackend, VisionInventoryBackend
 
 
 class InventoryWorkflowError(RuntimeError):

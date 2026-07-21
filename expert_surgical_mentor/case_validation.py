@@ -1,7 +1,5 @@
 """Validation for de-identified virtual case input."""
 
-from __future__ import annotations
-
 import re
 from dataclasses import dataclass
 from typing import Mapping

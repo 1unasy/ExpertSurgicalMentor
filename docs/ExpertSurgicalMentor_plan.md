@@ -435,7 +435,7 @@ YOLO 검출 예시는 다음과 같다.
 - `config/scenario_registry.json`
 - `data/virtual_cases_15.json`
 - `config/vlm_inventory_prompt.txt`
-- `expert_surgical_mentor/vlm_inventory_node.py`
+- `expert_surgical_mentor/vlm/node.py`
 - `tests/test_case_validator.py`
 - `tests/test_vlm_inventory_schema.py`
 

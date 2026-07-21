@@ -1,8 +1,6 @@
 """Deterministic Korean session reporting for inventory outcomes."""
 
-from __future__ import annotations
-
-from .inventory_schema import InventoryResult
+from .inventory import InventoryResult
 
 
 _KOREAN_TOOL_NAMES = {

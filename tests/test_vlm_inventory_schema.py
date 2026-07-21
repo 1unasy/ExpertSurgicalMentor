@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 import unittest
 from contextlib import nullcontext
@@ -8,15 +6,15 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from expert_surgical_mentor.case_validation import CaseInput
-from expert_surgical_mentor.inventory_schema import (
+from expert_surgical_mentor.vlm.backend import QwenVisionInventoryBackend
+from expert_surgical_mentor.vlm.inventory import (
     InventoryContractError,
     InventoryResult,
     VisualInventoryAssessment,
 )
-from expert_surgical_mentor.model_loader import ModelCatalog, QuantizedVlmLoader
-from expert_surgical_mentor.prompt_builder import InventoryPromptBuilder
+from expert_surgical_mentor.vlm.model_loader import ModelCatalog, QuantizedVlmLoader
+from expert_surgical_mentor.vlm.prompt import InventoryPromptBuilder
 from expert_surgical_mentor.scenario_registry import Scenario
-from expert_surgical_mentor.vlm_backend import QwenVisionInventoryBackend
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -196,7 +194,7 @@ class ModelLoaderTest(unittest.TestCase):
             return {"torch": fake_torch, "transformers": fake_transformers}[module_name]
 
         with patch(
-            "expert_surgical_mentor.model_loader.importlib.import_module",
+            "expert_surgical_mentor.vlm.model_loader.importlib.import_module",
             side_effect=fake_import,
         ):
             QuantizedVlmLoader(catalog).load("qwen3_vl_2b")
@@ -229,6 +227,7 @@ class PromptBuilderTest(unittest.TestCase):
         self.assertNotIn("safety_state", runtime)
         self.assertNotIn("yolo_detections", runtime)
         self.assertNotIn("scene_tools", runtime)
+
 
 class QwenVisionInventoryBackendTest(unittest.TestCase):
     def test_assess_builds_deterministic_request_and_parses_output(self) -> None:
@@ -280,7 +279,7 @@ class QwenVisionInventoryBackendTest(unittest.TestCase):
         loaded = SimpleNamespace(model=FakeModel(), processor=FakeProcessor())
         backend = QwenVisionInventoryBackend(loaded)
         with patch(
-            "expert_surgical_mentor.vlm_backend.importlib.import_module",
+            "expert_surgical_mentor.vlm.backend.importlib.import_module",
             side_effect=fake_import,
         ):
             assessment = backend.assess(

@@ -1,14 +1,12 @@
 """Validated inventory contracts shared by VLM and robot orchestration layers."""
 
-from __future__ import annotations
-
 import json
 import re
 from dataclasses import dataclass
 from typing import Iterable
 
-from .case_validation import CaseInput
-from .scenario_registry import Scenario
+from ..case_validation import CaseInput
+from ..scenario_registry import Scenario
 
 
 _JSON_FENCE = re.compile(r"^```(?:json)?\s*(\{.*\})\s*```$", re.DOTALL)

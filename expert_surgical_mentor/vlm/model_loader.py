@@ -1,7 +1,5 @@
 """Lazy, inference-only loading for the approved 4-bit VLM candidates."""
 
-from __future__ import annotations
-
 import importlib
 import json
 from dataclasses import dataclass

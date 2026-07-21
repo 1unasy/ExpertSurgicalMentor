@@ -1,20 +1,18 @@
-from __future__ import annotations
-
 import unittest
 from collections import deque
 from pathlib import Path
 
-from expert_surgical_mentor.inventory_schema import (
+from expert_surgical_mentor.vlm.inventory import (
     InventoryContractError,
     VisualInventoryAssessment,
 )
-from expert_surgical_mentor.prompt_builder import InventoryPrompt
-from expert_surgical_mentor.scenario_registry import ScenarioRegistry
-from expert_surgical_mentor.vlm_inventory_node import (
+from expert_surgical_mentor.vlm.node import (
     InventoryWorkflow,
     InventoryWorkflowError,
     VlmInventoryController,
 )
+from expert_surgical_mentor.vlm.prompt import InventoryPrompt
+from expert_surgical_mentor.scenario_registry import ScenarioRegistry
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
