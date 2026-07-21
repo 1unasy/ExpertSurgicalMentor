@@ -127,24 +127,21 @@ class InventorySchemaTest(unittest.TestCase):
         self.assertEqual(result.status, "ready_with_missing_tools")
         self.assertEqual(result.move_queue, ())
 
-    def test_previously_delivered_tool_may_leave_assist_tray(self) -> None:
+    def test_previously_delivered_tool_must_remain_on_assist_tray(self) -> None:
         assessment = VisualInventoryAssessment(
             present_required_tools=("Pill", "Syringe"),
             missing_tools=("XRay",),
             assist_tray_tools=("Pill",),
         )
 
-        result = InventoryResult.from_assessment(
-            self.case,
-            self.scenario,
-            assessment,
-            moved_tools=("XRay", "Pill"),
-            verification_tool="Pill",
-        )
-
-        self.assertEqual(result.missing_tools, ())
-        self.assertEqual(result.move_queue, ("Syringe",))
-        self.assertEqual(result.moved_tools, ("XRay", "Pill"))
+        with self.assertRaisesRegex(InventoryContractError, "전체"):
+            InventoryResult.from_assessment(
+                self.case,
+                self.scenario,
+                assessment,
+                moved_tools=("XRay", "Pill"),
+                verification_tool="Pill",
+            )
 
 
 class ModelLoaderTest(unittest.TestCase):

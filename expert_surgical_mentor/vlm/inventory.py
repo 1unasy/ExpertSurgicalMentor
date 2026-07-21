@@ -111,6 +111,10 @@ class InventoryResult:
                 raise InventoryContractError("검증 대상 물품은 이동 이력에 포함되어야 합니다.")
             if verification_tool not in assist_set:
                 raise InventoryContractError("이번 이동 물품은 보조 트레이에서 확인되어야 합니다.")
+            if not moved_set.issubset(assist_set):
+                raise InventoryContractError(
+                    "이동 완료 물품 전체가 보조 트레이에 유지되어야 합니다."
+                )
 
         present = tuple(tool for tool in required if tool in present_set)
         missing = tuple(

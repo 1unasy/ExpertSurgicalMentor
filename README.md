@@ -2,7 +2,7 @@
 
 감기·폐렴·골절 가상 케이스를 입력받아 MainToolTray의 필요 물품을 확인하고, 실제로 존재하는 물품만 AssistTray로 전달하기 위한 교육용 Physical AI 프로젝트다.
 
-현재 저장소에는 VLM 인벤토리 모듈과 ACT 데이터 수집·학습 보조 파일이 들어 있다. YOLO 손 감지 모듈, 물체별 ACT 정책 로더, 전체 시스템 통합 실행기는 이후 별도 모듈로 추가한다.
+현재 저장소에는 VLM 인벤토리 모듈, 손 감지 안전 상태, 물체별 ACT 정책 라우터와 통합 세션 상태가 들어 있다. 실제 ROS 2 transport, LeRobot 실행 API와 OMX-AI driver stop API는 장비 환경에서 연결해야 한다.
 
 기본 시연은 `data/demo_cases_syringe_pill.json`의 감기 입력 하나를 사용한다. 입력에는 환자·케이스·질환만 있으며, 실행 시 Scenario Registry에서 `Syringe`, `Pill` 순서가 결정된다.
 
@@ -35,7 +35,10 @@ ExpertSurgicalMentor/
 ├── data/                         VLM 평가용 가상 케이스
 ├── docs/                         프로젝트 계획과 ACT 작업 문서
 ├── expert_surgical_mentor/       재사용 가능한 Python 패키지
-│   └── vlm/                      VLM 전용 추론·인벤토리 모듈
+│   ├── vlm/                      VLM 전용 추론·인벤토리 모듈
+│   ├── safety/                   YOLO 손 관측과 fail-closed 안전 상태
+│   ├── robot/                    OMX-AI 물체별 ACT 정책 라우터
+│   └── system/                   공통 계약·세션 상태·GPU lease·조정기
 ├── scripts/                      평가와 ACT 학습 실행 스크립트
 ├── src/                          로봇 하드웨어 보조 실행 파일
 ├── tests/                        외부 모델 없이 실행되는 단위 테스트
@@ -65,6 +68,8 @@ ExpertSurgicalMentor/
 | 파일 | 역할 |
 |---|---|
 | `virtual_cases_15.json` | 감기·폐렴·골절 각 5개씩 총 15개 비식별 가상 케이스와 평가 기대값을 제공한다. 학습 데이터가 아니라 VLM 비교 평가용 데이터다. |
+| `demo_cases_syringe_pill.json` | Syringe/Pill 시연에 사용하는 입력 3필드만 보관한다. |
+| `vlm_eval/syringe_pill/` | S0-S5 실카메라 평가 이미지와 3프레임 manifest를 보관한다. |
 
 ### `docs/`
 
@@ -75,6 +80,7 @@ ExpertSurgicalMentor/
 | `ExpertSurgicalMentor_imitation_episodes_60.md` | 초기 모방학습 에피소드 60개의 작업·변형·분할 정의를 설명한다. |
 | `ExpertSurgicalMentor_imitation_episodes_60.jsonl` | 위 60개 에피소드를 프로그램에서 읽을 수 있는 JSONL 형식으로 제공한다. |
 | `command.md` | LeRobot 데이터 추가 수집, 물체별 데이터 분할, ACT 학습·추론 명령을 정리한다. |
+| `SyringePill_Demo_Runbook.md` | VLM 평가, 정상 시연, 안전 중단과 복구 순서를 정리한다. |
 
 ### `expert_surgical_mentor/`
 

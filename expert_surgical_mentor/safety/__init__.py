@@ -1,0 +1,2 @@
+"""Hand-detection safety package."""
+

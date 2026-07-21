@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "robot": {
+    "type": "omx_follower",
+    "port": "/dev/omx_follower",
+    "camera_names": ["front", "wrist"]
+  },
+  "policies": [
+    {
+      "tool_id": "Syringe",
+      "checkpoint": "outputs/train/act_syringe/checkpoints/last/pretrained_model",
+      "timeout_seconds": 30
+    },
+    {
+      "tool_id": "Pill",
+      "checkpoint": "outputs/train/act_pill/checkpoints/last/pretrained_model",
+      "timeout_seconds": 30
+    }
+  ]
+}

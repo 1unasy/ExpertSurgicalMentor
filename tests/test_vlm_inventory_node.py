@@ -2,8 +2,10 @@ import unittest
 from collections import deque
 from pathlib import Path
 
+from expert_surgical_mentor.case_validation import validate_case_payload
 from expert_surgical_mentor.vlm.inventory import (
     InventoryContractError,
+    InventoryResult,
     VisualInventoryAssessment,
 )
 from expert_surgical_mentor.vlm.node import (
@@ -178,6 +180,19 @@ class InventoryWorkflowTest(unittest.TestCase):
         verified = self.feed_three_frames(controller, "retry", 20)
         self.assertEqual(verified.result.moved_tools, ("Syringe",))
 
+    def test_later_post_check_requires_previous_moved_tool_to_remain_on_assist(self) -> None:
+        case, scenario = validate_case_payload(COLD_CASE, self.registry)
+        assessment = VisualInventoryAssessment(("Syringe", "Pill"), (), ("Pill",))
+
+        with self.assertRaisesRegex(InventoryContractError, "전체"):
+            InventoryResult.from_assessment(
+                case,
+                scenario,
+                assessment,
+                moved_tools=("Syringe", "Pill"),
+                verification_tool="Pill",
+            )
+
     def test_frames_captured_before_move_completion_are_ignored(self) -> None:
         all_present = VisualInventoryAssessment(("Syringe", "Pill"), (), ())
         after_syringe = VisualInventoryAssessment(
@@ -266,8 +281,12 @@ class InventoryWorkflowTest(unittest.TestCase):
         after_syringe = VisualInventoryAssessment(
             ("Syringe", "Pill"), (), ("Syringe",)
         )
-        before_pill = VisualInventoryAssessment(("Pill",), ("Syringe",), ())
-        after_pill = VisualInventoryAssessment(("Pill",), ("Syringe",), ("Pill",))
+        before_pill = VisualInventoryAssessment(
+            ("Syringe", "Pill"), (), ("Syringe",)
+        )
+        after_pill = VisualInventoryAssessment(
+            ("Syringe", "Pill"), (), ("Syringe", "Pill")
+        )
         controller, backend = self.build_controller(
             repeated(initial, 6)
             + repeated(after_syringe)
