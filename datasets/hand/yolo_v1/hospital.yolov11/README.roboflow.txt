@@ -25,5 +25,3 @@ The following pre-processing was applied to each image:
 * Resize to 512x512 (Stretch)
 
 No image augmentation techniques were applied.
-
-

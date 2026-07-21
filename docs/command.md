@@ -18,17 +18,17 @@ act_pill 실행
 
 ## 2. 데이터 수집 목표
 
-현재 물체별 10개에서 각각 20개를 추가해 30개씩 확보한다.
+`pick_and_place_v2`에 물체별 40개씩 확보한다.
 
 | 물체 | 현재 | 추가 | 최종 |
 |---|---:|---:|---:|
-| syringe | 10 | 20 | 30 |
-| glasses | 10 | 20 | 30 |
-| pill | 10 | 20 | 30 |
-| x-ray image | 10 | 20 | 30 |
-| 합계 | 40 | 80 | 120 |
+| syringe | 40 | 0 | 40 |
+| pill | 40 | 0 | 40 |
+| glasses | 0 | 40 | 40 |
+| x-ray image | 0 | 40 | 40 |
+| 합계 | 80 | 80 | 160 |
 
-명령으로 여러 물체를 순서대로 전달하면 Main Tray에 남은 물체 수가 줄어든다. 물체별 추가 20개는 다음 조건을 권장한다.
+명령으로 여러 물체를 순서대로 전달하면 Main Tray에 남은 물체 수가 줄어든다. 물체별 40개는 여러 잔여 상태를 포함하도록 수집한다.
 
 - 8개: 네 물체 모두 Main Tray에 있음
 - 6개: 목표 물체를 포함해 3개가 Main Tray에 있음
@@ -43,7 +43,7 @@ act_pill 실행
 source ~/venv/il/bin/activate
 
 export HF_USER=1unasy
-export DATASET_ID="${HF_USER}/pick_and_place"
+export DATASET_ID="${HF_USER}/pick_and_place_v2"
 export DATASET_DIR="$HOME/.cache/huggingface/lerobot/${DATASET_ID}"
 ```
 
@@ -54,8 +54,79 @@ python3 -c "import json; i=json.load(open('${DATASET_DIR}/meta/info.json')); pri
 현재 데이터가 정상이라면 다음과 같이 출력된다.
 
 ```text
-episodes: 40 tasks: 4
+episodes: 80 tasks: 2
 ```
+
+### `pick_and_place_v2` 새 세트 수집
+
+모든 명령과 로컬 경로, Hub 저장소는 `1unasy/pick_and_place_v2`를 사용한다.
+
+이미 완료한 최초 syringe 수집 명령:
+
+```bash
+cd ~/ExpertSurgicalMentor
+
+./scripts/record_object_dataset.sh new pick_and_place_v2 syringe 40
+```
+
+이미 완료한 pill 수집 명령:
+
+```bash
+./scripts/record_object_dataset.sh more pick_and_place_v2 pill 40
+```
+
+향후 같은 데이터셋에 이어서 수집할 명령:
+
+```bash
+./scripts/record_object_dataset.sh more pick_and_place_v2 glasses 40
+./scripts/record_object_dataset.sh more pick_and_place_v2 xray 40
+```
+
+추가 에피소드를 더 수집할 때도 `more`를 사용한다.
+
+```bash
+./scripts/record_object_dataset.sh more pick_and_place_v2 syringe 10
+```
+
+기본 포트는 follower `/dev/ttyACM0`, leader `/dev/ttyACM1`이다. 포트가 달라지면:
+
+```bash
+FOLLOWER_PORT=/dev/omx_follower \
+LEADER_PORT=/dev/omx_leader \
+./scripts/record_object_dataset.sh new pick_and_place_v2 syringe 40
+```
+
+새 로컬 폴더:
+
+```text
+/home/user/.cache/huggingface/lerobot/1unasy/pick_and_place_v2
+```
+
+수집 결과 확인:
+
+```bash
+python3 -c "import json; p='$HOME/.cache/huggingface/lerobot/1unasy/pick_and_place_v2/meta/info.json'; i=json.load(open(p)); print('episodes:', i['total_episodes'], 'tasks:', i['total_tasks'], 'frames:', i['total_frames'])"
+```
+
+Hugging Face에 새 데이터셋으로 업로드:
+
+```bash
+source ~/venv/il/bin/activate
+
+hf upload-large-folder \
+  "1unasy/pick_and_place_v2" \
+  "$HOME/.cache/huggingface/lerobot/1unasy/pick_and_place_v2" \
+  --repo-type dataset
+```
+
+업로드 결과:
+
+```text
+https://huggingface.co/datasets/1unasy/pick_and_place_v2
+```
+
+이 실행 파일은 현재 권장 CLI인 `hf upload-large-folder`를 사용하므로 대용량 업로드가
+중단되어도 다시 같은 명령을 실행해 이어서 처리할 수 있다.
 
 ## 4. 이어 녹화 함수
 
@@ -88,25 +159,23 @@ record_more() {
 }
 ```
 
-## 5. 물체별 20개 추가 수집
+## 5. 현재 수집 상태와 남은 수집
 
 아래 순서대로 수집하면 추가 에피소드 번호를 명확히 관리할 수 있다.
 
 ```bash
-record_more "Pick up syringe" 20
-record_more "Pick up glasses" 20
-record_more "Pick up a pill" 20
-record_more "Pick up xray-image" 20
+record_more "Pick up glasses" 40
+record_more "Pick up xray-image" 40
 ```
 
 기존 task 문자열과 철자, 대소문자, 공백을 동일하게 유지한다.
 
-| 물체 | 기존 에피소드 | 추가 에피소드 |
+| 물체 | 상태 | 에피소드 |
 |---|---|---|
-| syringe | 0–9 | 40–59 |
-| glasses | 10–19 | 60–79 |
-| pill | 20–29 | 80–99 |
-| x-ray image | 30–39 | 100–119 |
+| syringe | 완료 | 0–39 |
+| pill | 완료 | 40–79 |
+| glasses | 수집 예정 | 80–119 |
+| x-ray image | 수집 예정 | 120–159 |
 
 ## 6. 수집 결과 확인
 
@@ -116,10 +185,10 @@ record_more "Pick up xray-image" 20
 python3 -c "import json; i=json.load(open('${DATASET_DIR}/meta/info.json')); print('episodes:', i['total_episodes'], 'tasks:', i['total_tasks'], 'frames:', i['total_frames'])"
 ```
 
-목표 결과:
+현재 결과:
 
 ```text
-episodes: 120 tasks: 4
+episodes: 80 tasks: 2
 ```
 
 물체별 개수 확인:
@@ -131,7 +200,7 @@ import pathlib
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-root = pathlib.Path.home() / ".cache/huggingface/lerobot/1unasy/pick_and_place/meta/episodes"
+root = pathlib.Path.home() / ".cache/huggingface/lerobot/1unasy/pick_and_place_v2/meta/episodes"
 tables = [
     pq.read_table(path, columns=["episode_index", "tasks"])
     for path in sorted(root.rglob("*.parquet"))
@@ -144,44 +213,42 @@ for task, count in sorted(counts.items()):
 PY
 ```
 
-목표 결과:
+현재 결과:
 
 ```text
-Pick up a pill: 30
-Pick up glasses: 30
-Pick up syringe: 30
-Pick up xray-image: 30
+Pick up a pill: 40
+Pick up syringe: 40
 ```
+
+glasses와 x-ray image까지 수집한 최종 목표는 `episodes: 160 tasks: 4`이다.
 
 ## 7. 기존 Hugging Face 저장소 갱신
 
 ```bash
-huggingface-cli upload \
+hf upload-large-folder \
   "${DATASET_ID}" \
   "${DATASET_DIR}" \
-  . \
   --repo-type dataset
 ```
 
 업로드 결과는 다음에서 확인한다.
 
 ```text
-https://huggingface.co/datasets/1unasy/pick_and_place
+https://huggingface.co/datasets/1unasy/pick_and_place_v2
 ```
 
 ## 8. 물체별 학습 데이터셋 생성
 
-원본 데이터셋은 보존하고 물체별 분할본을 생성한다.
+현재 수집이 완료된 syringe와 pill의 분할본을 생성한다. glasses와 x-ray image는 각각
+40개 수집을 완료한 뒤 split 항목에 추가한다.
 
 ```bash
 cd ~/ExpertSurgicalMentor/src/lerobot && lerobot-edit-dataset \
-  --repo_id="${HF_USER}/pick_and_place" \
+  --repo_id="${HF_USER}/pick_and_place_v2" \
   --operation.type=split \
   --operation.splits='{
-    "syringe": [0,1,2,3,4,5,6,7,8,9,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59],
-    "glasses": [10,11,12,13,14,15,16,17,18,19,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79],
-    "pill": [20,21,22,23,24,25,26,27,28,29,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99],
-    "xray_image": [30,31,32,33,34,35,36,37,38,39,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119]
+    "syringe": [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39],
+    "pill": [40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79]
   }' \
   --push_to_hub=false
 ```
@@ -189,43 +256,140 @@ cd ~/ExpertSurgicalMentor/src/lerobot && lerobot-edit-dataset \
 생성 결과:
 
 ```text
-1unasy/pick_and_place_syringe
-1unasy/pick_and_place_glasses
-1unasy/pick_and_place_pill
-1unasy/pick_and_place_xray_image
+1unasy/pick_and_place_v2_syringe
+1unasy/pick_and_place_v2_pill
 ```
+
+### 40개 syringe 데이터의 train/valid/test 분할
+
+물체별 40개 데이터는 다음처럼 `28/6/6`으로 분할한다. 비율 기반 split은 에피소드를
+앞에서부터 순서대로 자르므로, 아래 스크립트는 수집 순서 전체에서 valid/test를 고르게
+선택한다.
+
+```bash
+cd ~/ExpertSurgicalMentor
+
+./scripts/split_lerobot_40.sh pick_and_place_v2_syringe
+```
+
+생성 결과:
+
+```text
+1unasy/pick_and_place_v2_syringe_train   # 28 episodes
+1unasy/pick_and_place_v2_syringe_valid   #  6 episodes
+1unasy/pick_and_place_v2_syringe_test    #  6 episodes
+```
+
+기존 분할 폴더가 있으면 스크립트는 덮어쓰지 않고 종료한다. ACT 학습에는 `_train`만
+사용하고, `_valid`는 체크포인트 선택에, `_test`는 최종 모델을 한 번 평가할 때 사용한다.
+현재 `lerobot-train`의 `eval_freq`는 이 offline valid 데이터셋을 자동 평가하는 옵션이
+아니므로 valid/test 성공률은 실제 로봇에서 같은 시작 조건으로 별도 기록한다.
+
+분할된 28개 train 에피소드만 사용해 별도 출력 폴더로 학습하려면:
+
+```bash
+cd ~/ExpertSurgicalMentor
+
+DATASET_SPLIT=train \
+OUTPUT_PREFIX=act_v2_split \
+STEPS=20000 \
+BATCH_SIZE=8 \
+./scripts/train_act_objects.sh syringe
+```
+
+40개 분할부터 syringe 100,000 step 학습까지 한 번에 수행:
+
+```bash
+cd ~/ExpertSurgicalMentor
+./scripts/split_train_syringe_100k.sh
+```
+
+기본 출력은 `src/lerobot/outputs/train/act_v2_split100k_syringe`이며 10,000 step마다
+체크포인트를 저장한다. `--wait-for-pid PID --tmux-target 0:0.0` 옵션은 현재 tmux
+foreground 학습 PID가 끝난 뒤 같은 pane에 위 명령을 자동으로 전달할 때 사용한다.
+
+### Syringe와 pill 분할 및 100,000 step 순차 학습
+
+각 물체의 40개 에피소드를 `train 28 / valid 6 / test 6`으로 나눈 뒤 train split만
+사용하여 syringe, pill 순서로 학습한다.
+
+```bash
+cd ~/ExpertSurgicalMentor
+./scripts/split_train_act_objects_100k.sh syringe pill
+```
+
+현재 학습 PID가 종료됐는지 30분마다 확인하고, 종료 후 tmux `0:0.0`에서 자동 시작:
+
+```bash
+cd ~/ExpertSurgicalMentor
+
+nohup ./scripts/split_train_act_objects_100k.sh \
+  --wait-for-pid CURRENT_TRAIN_PID \
+  --tmux-target 0:0.0 \
+  syringe pill \
+  > /tmp/esm_act_objects_100k_queue.log 2>&1 &
+```
+
+`valid`는 체크포인트 선택용, `test`는 최종 평가용으로 남겨 둔다. 현재 LeRobot ACT
+학습 명령은 offline valid/test를 자동 평가하지 않으므로 실제 로봇 성공률을 각 split의
+초기 배치 조건에 맞춰 별도로 기록한다.
 
 확인:
 
 ```bash
 find ~/.cache/huggingface/lerobot/1unasy \
-  -maxdepth 1 -type d -name 'pick_and_place_*' -print
+  -maxdepth 1 -type d -name 'pick_and_place_v2_*' -print
 ```
 
 ## 9. ACT 모델 학습
 
 공통 설정:
 
-- 물체별 30 episodes
-- 50,000 steps
-- 10,000 steps마다 체크포인트 저장
-- RTX 4060 기준 batch size 4
+- 현재 syringe와 pill 각각 40 episodes
+- 20,000 steps
+- 5,000 steps마다 체크포인트 저장
+- RTX 4060 기준 batch size 8
+
+현재 수집 완료된 syringe와 pill만 순차 학습하는 권장 실행 파일:
+
+```bash
+cd ~/ExpertSurgicalMentor
+
+./scripts/train_act_objects.sh syringe pill
+```
+
+기본값은 RTX 4060에서 확인한 `batch_size=8`, 물체별 `20,000 steps`, `5,000
+steps`마다 체크포인트 저장이다. 환경 변수로 변경할 수 있다.
+
+```bash
+BATCH_SIZE=8 \
+STEPS=20000 \
+SAVE_FREQ=5000 \
+./scripts/train_act_objects.sh syringe pill
+```
+
+학습 순서와 출력 경로:
+
+```text
+pick_and_place_v2_syringe → outputs/train/act_v2_syringe
+pick_and_place_v2_pill    → outputs/train/act_v2_pill
+```
 
 ### Syringe
 
 ```bash
 cd ~/ExpertSurgicalMentor/src/lerobot && lerobot-train \
-  --dataset.repo_id="${HF_USER}/pick_and_place_syringe" \
+  --dataset.repo_id="${HF_USER}/pick_and_place_v2_syringe" \
   --policy.type=act \
   --policy.device=cuda \
   --policy.use_amp=true \
   --policy.push_to_hub=false \
   --output_dir="outputs/train/act_syringe" \
   --job_name="act_syringe" \
-  --batch_size=4 \
-  --steps=50000 \
+  --batch_size=8 \
+  --steps=20000 \
   --save_checkpoint=true \
-  --save_freq=10000 \
+  --save_freq=5000 \
   --eval_freq=0 \
   --wandb.enable=false
 ```
@@ -234,17 +398,17 @@ cd ~/ExpertSurgicalMentor/src/lerobot && lerobot-train \
 
 ```bash
 cd ~/ExpertSurgicalMentor/src/lerobot && lerobot-train \
-  --dataset.repo_id="${HF_USER}/pick_and_place_glasses" \
+  --dataset.repo_id="${HF_USER}/pick_and_place_v2_glasses" \
   --policy.type=act \
   --policy.device=cuda \
   --policy.use_amp=true \
   --policy.push_to_hub=false \
   --output_dir="outputs/train/act_glasses" \
   --job_name="act_glasses" \
-  --batch_size=4 \
-  --steps=50000 \
+  --batch_size=8 \
+  --steps=20000 \
   --save_checkpoint=true \
-  --save_freq=10000 \
+  --save_freq=5000 \
   --eval_freq=0 \
   --wandb.enable=false
 ```
@@ -253,17 +417,17 @@ cd ~/ExpertSurgicalMentor/src/lerobot && lerobot-train \
 
 ```bash
 cd ~/ExpertSurgicalMentor/src/lerobot && lerobot-train \
-  --dataset.repo_id="${HF_USER}/pick_and_place_pill" \
+  --dataset.repo_id="${HF_USER}/pick_and_place_v2_pill" \
   --policy.type=act \
   --policy.device=cuda \
   --policy.use_amp=true \
   --policy.push_to_hub=false \
   --output_dir="outputs/train/act_pill" \
   --job_name="act_pill" \
-  --batch_size=4 \
-  --steps=50000 \
+  --batch_size=8 \
+  --steps=20000 \
   --save_checkpoint=true \
-  --save_freq=10000 \
+  --save_freq=5000 \
   --eval_freq=0 \
   --wandb.enable=false
 ```
@@ -272,17 +436,17 @@ cd ~/ExpertSurgicalMentor/src/lerobot && lerobot-train \
 
 ```bash
 cd ~/ExpertSurgicalMentor/src/lerobot && lerobot-train \
-  --dataset.repo_id="${HF_USER}/pick_and_place_xray_image" \
+  --dataset.repo_id="${HF_USER}/pick_and_place_v2_xray_image" \
   --policy.type=act \
   --policy.device=cuda \
   --policy.use_amp=true \
   --policy.push_to_hub=false \
   --output_dir="outputs/train/act_xray_image" \
   --job_name="act_xray_image" \
-  --batch_size=4 \
-  --steps=50000 \
+  --batch_size=8 \
+  --steps=20000 \
   --save_checkpoint=true \
-  --save_freq=10000 \
+  --save_freq=5000 \
   --eval_freq=0 \
   --wandb.enable=false
 ```
@@ -367,6 +531,120 @@ run_object glasses
 run_object pill
 run_object xray
 ```
+
+### Syringe 모델 10회 연속 평가
+
+아래 명령은 학습이 완료된 syringe의 마지막 체크포인트를 사용해 10회 연속 추론한다.
+각 에피소드는 20초이며, 에피소드 사이에 물품과 로봇 시작 자세를 다시 설정할 수 있도록
+30초의 대기 시간을 둔다. `RUN_ID`는 나노초까지 포함해 기존 평가 데이터셋과 이름이
+겹치지 않도록 한다.
+
+```bash
+source ~/venv/il/bin/activate
+export HF_USER=1unasy
+RUN_ID=$(date +%Y%m%d_%H%M%S_%N)
+
+cd ~/ExpertSurgicalMentor/src/lerobot
+
+lerobot-record \
+  --robot.type=omx_follower \
+  --robot.port=/dev/ttyACM0 \
+  --robot.id=omx_follower_arm \
+  --robot.cameras='{
+    front: {type: opencv, index_or_path: 4, width: 640, height: 480, fps: 30, fourcc: MJPG},
+    wrist: {type: opencv, index_or_path: 2, width: 640, height: 480, fps: 30, fourcc: MJPG}
+  }' \
+  --display_data=true \
+  --play_sounds=true \
+  --return_to_start_pose=true \
+  --return_to_start_duration_s=5 \
+  --start_pose_path="$HOME/ExpertSurgicalMentor/config/omx_start_pose.json" \
+  --dataset.repo_id="${HF_USER}/eval_syringe_${RUN_ID}" \
+  --dataset.single_task="Pick up syringe" \
+  --dataset.episode_time_s=20 \
+  --dataset.num_episodes=10 \
+  --dataset.reset_time_s=30 \
+  --dataset.push_to_hub=false \
+  --policy.path="outputs/train/act_syringe/checkpoints/last/pretrained_model"
+```
+
+실행하면 follower가 5초 동안 `config/omx_start_pose.json`의 기준 자세로 먼저 이동한다.
+각 20초 추론이 끝나면 5초 동안 동일한 자세로 부드럽게 복귀하고, 음성으로 reset 구간을 알린 뒤 30초 동안 화면을
+표시하면서 기다린다. 이때 syringe와 주변 물품 위치를 바꾸고 로봇 동작 범위 밖으로
+이동한다. 재설정 시간이 부족하면 `--dataset.reset_time_s=60`으로 늘린다.
+
+기준 자세는 syringe 학습 데이터 30개 에피소드의 첫 프레임 관절값 중앙값으로 설정했다.
+자동 이동 경로에 물품이나 사람이 있으면 충돌할 수 있으므로 시작 및 복귀 동작 중 작업 공간을 비워 둔다.
+`Esc`로 비상 종료한 경우에는 자동 복귀하지 않는다.
+
+동일한 명령을 물품 이름만 바꿔 실행할 수 있도록 실행 파일도 제공한다. 기본값은 VLM
+라우터가 한 물품씩 호출하기 적합한 1회 실행이다.
+
+```bash
+cd ~/ExpertSurgicalMentor
+
+./scripts/run_act_object.sh syringe
+./scripts/run_act_object.sh glasses
+./scripts/run_act_object.sh pill
+./scripts/run_act_object.sh xray
+```
+
+수동으로 동일 물품을 10회 평가할 때는 다음처럼 실행한다.
+
+```bash
+./scripts/run_act_object.sh syringe --episodes 10
+```
+
+실행 파일은 기본적으로 `--policy.n_action_steps=20`을 적용해 약 0.67초마다 카메라를
+다시 보고 행동을 생성한다. 기존 기본값 100과 비교하거나 동작이 끊기는 경우에는 다음처럼
+변경할 수 있다.
+
+```bash
+./scripts/run_act_object.sh syringe --action-steps 30
+./scripts/run_act_object.sh syringe --action-steps 100
+```
+
+follower 포트가 udev 링크로 설정되어 있으면 환경 변수로 변경할 수 있다.
+
+```bash
+ROBOT_PORT=/dev/omx_follower ./scripts/run_act_object.sh syringe
+```
+
+### YOLO 손 감지와 ACT 안전 정지 통합
+
+`run_act_object.sh`는 기본적으로 다음 손 감지 모델을 함께 실행한다.
+
+```text
+outputs/train/hand_yolo_v1/weights/best.pt
+```
+
+실행 순서는 다음과 같다.
+
+1. front 카메라 프레임에서 YOLO가 손을 감지한다.
+2. 손이 보이면 ACT 액션 대신 현재 관절 위치를 전송하여 로봇을 정지시킨다.
+3. 손이 다시 보일 때마다 안전 해제 타이머를 초기화한다.
+4. 손이 연속 10초 동안 보이지 않으면 정지 전에 생성된 ACT 액션 큐를 버린다.
+5. 현재 카메라 영상으로 ACT가 새 행동을 추론하고 남은 에피소드를 계속한다.
+
+정지 시간은 `--episode-time`에 포함되지 않는다. 초기 자세 이동과 에피소드 종료 후
+초기 자세 복귀에도 같은 손 감지 정지가 적용된다.
+
+```bash
+cd ~/ExpertSurgicalMentor
+
+./scripts/run_act_object.sh syringe \
+  --episodes 10 \
+  --safety-clear 10 \
+  --safety-conf 0.15
+```
+
+YOLO 오검출이 많으면 `--safety-conf`를 조금 높이고, 손을 놓치는 경우에는 낮춘다.
+안전 기능을 끈 비교 실험은 `--no-safety`로 가능하지만 실제 로봇 시연에는 권장하지 않는다.
+이 기능은 소프트웨어 보조 장치이므로 비상 정지 수단을 즉시 사용할 수 있는 상태로 시험한다.
+
+VLM 연동 시에는 VLM 출력값을 그대로 셸 명령으로 실행하지 않고, `syringe`, `glasses`,
+`pill`, `xray` 중 하나인지 검증한 뒤 이 실행 파일의 첫 번째 인자로 전달한다. 실행 파일도
+동일한 허용 목록을 검사하며 선택된 물품에 맞는 ACT 모델과 task 문자열만 불러온다.
 
 여러 물체를 순차 실행:
 
