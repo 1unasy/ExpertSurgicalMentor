@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import Iterable
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,17 +31,18 @@ class InventoryPromptBuilder:
         case_id: str,
         disease_name: str,
         required_tools: Iterable[str],
-        yolo_detections: Iterable[Mapping[str, object]] = (),
-        moved_tools: Iterable[str] = (),
+        verification_tool: str | None = None,
     ) -> InventoryPrompt:
         runtime_context = {
             "patient_id": patient_id,
             "case_id": case_id,
             "disease_name": disease_name,
             "required_tools": list(required_tools),
-            "moved_tools": list(moved_tools),
-            "yolo_detections": [dict(detection) for detection in yolo_detections],
-            "instruction": "첨부된 최신 작업 공간 이미지에서 필요 물품의 존재 여부를 판정하세요.",
+            "verification_tool": verification_tool,
+            "instruction": (
+                "첨부된 최신 작업 공간 이미지에서 required_tools의 존재 여부와 "
+                "MainToolTray 또는 AssistTray 위치를 판정하세요."
+            ),
         }
         return InventoryPrompt(
             system_text=self._system_text,

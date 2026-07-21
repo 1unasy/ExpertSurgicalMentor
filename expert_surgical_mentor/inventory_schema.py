@@ -77,6 +77,7 @@ class InventoryResult:
         scenario: Scenario,
         assessment: VisualInventoryAssessment,
         moved_tools: Iterable[str] = (),
+        verification_tool: str | None = None,
     ) -> "InventoryResult":
         required = scenario.required_tools
         required_set = set(required)
@@ -86,7 +87,10 @@ class InventoryResult:
         moved = tuple(moved_tools)
         moved_set = set(moved)
 
-        unexpected = (present_set | missing_set | assist_set | moved_set) - required_set
+        reported_tools = present_set | missing_set | assist_set | moved_set
+        if verification_tool is not None:
+            reported_tools.add(verification_tool)
+        unexpected = reported_tools - required_set
         if unexpected:
             names = ", ".join(sorted(unexpected))
             raise InventoryContractError(f"현재 시나리오에 없는 물품입니다: {names}")
@@ -97,14 +101,31 @@ class InventoryResult:
             raise InventoryContractError("모든 필요 물품을 존재 또는 누락으로 분류해야 합니다.")
         if not assist_set.issubset(present_set):
             raise InventoryContractError("보조 트레이 물품은 존재 물품에 포함되어야 합니다.")
-        if not moved_set.issubset(assist_set):
-            raise InventoryContractError("이동 완료 물품은 보조 트레이에서 확인되어야 합니다.")
+        if verification_tool is not None:
+            if verification_tool not in moved_set:
+                raise InventoryContractError("검증 대상 물품은 이동 이력에 포함되어야 합니다.")
+            if verification_tool not in assist_set:
+                raise InventoryContractError("이번 이동 물품은 보조 트레이에서 확인되어야 합니다.")
 
         present = tuple(tool for tool in required if tool in present_set)
-        missing = tuple(tool for tool in required if tool in missing_set)
+        missing = tuple(
+            tool
+            for tool in required
+            if tool in missing_set and tool not in moved_set
+        )
         moved_in_order = tuple(tool for tool in required if tool in moved_set)
-        move_queue = tuple(tool for tool in present if tool not in moved_set)
-        status = _resolve_status(missing, move_queue, moved_in_order, required)
+        move_queue = tuple(
+            tool
+            for tool in present
+            if tool not in assist_set and tool not in moved_set
+        )
+        status = _resolve_status(
+            missing,
+            move_queue,
+            moved_in_order,
+            required,
+            assist_set,
+        )
 
         return cls(
             status=status,
@@ -146,10 +167,11 @@ def _resolve_status(
     move_queue: tuple[str, ...],
     moved: tuple[str, ...],
     required: tuple[str, ...],
+    assist: set[str],
 ) -> str:
-    if len(moved) == len(required):
+    if len(set(moved) | assist) == len(required):
         return "completed"
-    if not move_queue and not moved:
+    if not move_queue and not moved and not assist:
         return "no_required_tools_present"
     if missing:
         return "ready_with_missing_tools"

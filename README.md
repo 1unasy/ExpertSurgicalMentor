@@ -25,6 +25,10 @@ python3 -m pip install -r requirements-vlm.txt
 
 모든 후보는 bitsandbytes NF4 4-bit로만 로드된다. 이 저장소의 VLM 코드는 추론과 비교만 수행하며 모델을 학습하거나 가중치를 수정하지 않는다.
 
+Qwen 계열에는 `system` 역할로 `config/vlm_inventory_prompt.txt`를, `user` 역할로 환자·시나리오 JSON과 최신 이미지를 전달한다. Qwen 전용 chat template 토큰은 코드에 직접 적지 않고 `AutoProcessor.apply_chat_template()`이 모델 버전에 맞게 생성한다. YOLO는 물품을 인식하지 않으며, 별도 Safety Controller가 `hand_detected=true`일 때 VLM 추론과 로봇 실행을 중지한다.
+
+이동 직후에는 `verification_tool` 하나만 AssistTray에서 시각적으로 재확인한다. 확인이 끝난 물품의 전달 이력은 코드가 유지하므로, 의료진이 해당 물품을 AssistTray에서 가져간 뒤 다음 프레임에서 보이지 않아도 이전 성공 기록은 취소되지 않는다.
+
 ## 테스트
 
 외부 모델이나 ROS 2 없이 핵심 계약과 상태 전이를 검증할 수 있다.
@@ -54,7 +58,7 @@ python3 -m expert_surgical_mentor.vlm_inventory_node --model qwen3_vl_2b
 사용하는 인터페이스는 다음과 같다.
 
 - 구독 `/camera/keyframe`: VLM에 사용할 최신 `sensor_msgs/Image`
-- 구독 `/perception/detections`: YOLO 검출 배열 JSON
+- 구독 `/safety/hand_state`: YOLO 손 감지 상태 `{"hand_detected": true|false}`
 - 구독 `/case/input`: 환자 ID·케이스 ID·질환명 JSON
 - 구독 `/robot/move_completed`: `case_id`, `tool_id` JSON
 - 발행 `/inventory/state`: 필요·존재·누락·이동 대기·이동 완료 물품

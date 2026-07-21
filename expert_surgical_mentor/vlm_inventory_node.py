@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from pathlib import Path
 
 from .case_validation import CaseInput, UnsupportedDiseaseError, validate_case_payload
@@ -44,18 +44,19 @@ class InventoryWorkflow:
         self,
         payload: Mapping[str, object],
         image: object,
-        yolo_detections: Iterable[Mapping[str, object]] = (),
+        hand_detected: bool = False,
     ) -> InventoryResult:
         self._case = None
         self._scenario = None
         self._current_result = None
+        _ensure_hand_clear(hand_detected)
         case, scenario = validate_case_payload(payload, self._registry)
         result = self._assess(
             case=case,
             scenario=scenario,
             image=image,
-            yolo_detections=yolo_detections,
             moved_tools=(),
+            verification_tool=None,
         )
         self._case = case
         self._scenario = scenario
@@ -66,8 +67,9 @@ class InventoryWorkflow:
         self,
         tool_id: str,
         image: object,
-        yolo_detections: Iterable[Mapping[str, object]] = (),
+        hand_detected: bool = False,
     ) -> InventoryResult:
+        _ensure_hand_clear(hand_detected)
         if self._case is None or self._scenario is None or self._current_result is None:
             raise InventoryWorkflowError("활성화된 가상 케이스가 없습니다.")
         if not self._current_result.move_queue or tool_id != self._current_result.move_queue[0]:
@@ -78,8 +80,8 @@ class InventoryWorkflow:
             case=self._case,
             scenario=self._scenario,
             image=image,
-            yolo_detections=yolo_detections,
             moved_tools=moved_tools,
+            verification_tool=tool_id,
         )
         self._current_result = result
         return result
@@ -95,16 +97,15 @@ class InventoryWorkflow:
         case: CaseInput,
         scenario: Scenario,
         image: object,
-        yolo_detections: Iterable[Mapping[str, object]],
         moved_tools: tuple[str, ...],
+        verification_tool: str | None,
     ) -> InventoryResult:
         prompt = self._prompt_builder.build(
             patient_id=case.patient_id,
             case_id=case.case_id,
             disease_name=case.disease_name,
             required_tools=scenario.required_tools,
-            yolo_detections=yolo_detections,
-            moved_tools=moved_tools,
+            verification_tool=verification_tool,
         )
         assessment = self._vision_backend.assess(image, prompt)
         return InventoryResult.from_assessment(
@@ -112,6 +113,7 @@ class InventoryWorkflow:
             scenario=scenario,
             assessment=assessment,
             moved_tools=moved_tools,
+            verification_tool=verification_tool,
         )
 
 
@@ -123,21 +125,18 @@ class VlmInventoryController:
         self._latest_keyframe: object | None = None
         self._keyframe_version = 0
         self._last_analysis_version = -1
-        self._yolo_detections: tuple[Mapping[str, object], ...] = ()
+        self._hand_detected = False
 
     def update_keyframe(self, image: object) -> None:
         self._latest_keyframe = image
         self._keyframe_version += 1
 
-    def update_yolo_detections(
-        self,
-        detections: Iterable[Mapping[str, object]],
-    ) -> None:
-        self._yolo_detections = tuple(dict(detection) for detection in detections)
+    def update_hand_detection(self, hand_detected: bool) -> None:
+        self._hand_detected = hand_detected
 
     def handle_case_input(self, payload: Mapping[str, object]) -> InventoryResult:
         image, keyframe_version = self._require_keyframe(require_fresh=False)
-        result = self._workflow.start_case(payload, image, self._yolo_detections)
+        result = self._workflow.start_case(payload, image, self._hand_detected)
         self._last_analysis_version = keyframe_version
         return result
 
@@ -152,7 +151,7 @@ class VlmInventoryController:
         ):
             raise InventoryWorkflowError(f"현재 케이스와 다른 이동 완료 이벤트입니다: {case_id}")
         image, keyframe_version = self._require_keyframe(require_fresh=True)
-        result = self._workflow.complete_move(tool_id, image, self._yolo_detections)
+        result = self._workflow.complete_move(tool_id, image, self._hand_detected)
         self._last_analysis_version = keyframe_version
         return result
 
@@ -165,6 +164,11 @@ class VlmInventoryController:
         if require_fresh and self._keyframe_version <= self._last_analysis_version:
             raise InventoryWorkflowError("이동 완료 후의 새로운 대표 프레임이 필요합니다.")
         return self._latest_keyframe, self._keyframe_version
+
+
+def _ensure_hand_clear(hand_detected: bool) -> None:
+    if hand_detected:
+        raise InventoryWorkflowError("트레이 영역에서 손이 감지되어 로봇 동작을 중지합니다.")
 
 
 def build_quantized_controller(
@@ -214,7 +218,7 @@ def run_ros_node(
             self._report_publisher = self.create_publisher(String, "/session/report", 10)
             self._error_publisher = self.create_publisher(String, "/inventory/error", 10)
             self.create_subscription(RosImage, "/camera/keyframe", self._on_keyframe, 10)
-            self.create_subscription(String, "/perception/detections", self._on_detections, 10)
+            self.create_subscription(String, "/safety/hand_state", self._on_hand_state, 10)
             self.create_subscription(String, "/case/input", self._on_case_input, 10)
             self.create_subscription(
                 String,
@@ -230,12 +234,15 @@ def run_ros_node(
             except Exception as error:
                 self._publish_error(error)
 
-        def _on_detections(self, message: String) -> None:
+        def _on_hand_state(self, message: String) -> None:
             try:
-                detections = json.loads(message.data)
-                if not isinstance(detections, list):
-                    raise ValueError("detections는 배열이어야 합니다.")
-                self._controller.update_yolo_detections(detections)
+                payload = json.loads(message.data)
+                if not isinstance(payload, dict) or set(payload) != {"hand_detected"}:
+                    raise ValueError("hand_state는 hand_detected만 포함해야 합니다.")
+                hand_detected = payload["hand_detected"]
+                if not isinstance(hand_detected, bool):
+                    raise TypeError("hand_detected는 boolean이어야 합니다.")
+                self._controller.update_hand_detection(hand_detected)
             except (TypeError, ValueError) as error:
                 self._publish_error(error)
 

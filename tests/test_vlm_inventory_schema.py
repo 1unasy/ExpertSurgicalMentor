@@ -44,6 +44,7 @@ class InventorySchemaTest(unittest.TestCase):
             scenario=self.scenario,
             assessment=assessment,
             moved_tools=("XRay",),
+            verification_tool="XRay",
         )
 
         self.assertEqual(result.present_required_tools, ("XRay", "Syringe"))
@@ -104,6 +105,48 @@ class InventorySchemaTest(unittest.TestCase):
                 "moved_tools": [],
             },
         )
+
+    def test_assist_tray_tool_is_not_added_to_move_queue(self) -> None:
+        assessment = VisualInventoryAssessment(
+            present_required_tools=("XRay", "Pill", "Syringe"),
+            missing_tools=(),
+            assist_tray_tools=("XRay",),
+        )
+
+        result = InventoryResult.from_assessment(self.case, self.scenario, assessment)
+
+        self.assertEqual(result.move_queue, ("Pill", "Syringe"))
+
+    def test_partial_assist_inventory_is_not_reported_as_empty(self) -> None:
+        assessment = VisualInventoryAssessment(
+            present_required_tools=("XRay",),
+            missing_tools=("Pill", "Syringe"),
+            assist_tray_tools=("XRay",),
+        )
+
+        result = InventoryResult.from_assessment(self.case, self.scenario, assessment)
+
+        self.assertEqual(result.status, "ready_with_missing_tools")
+        self.assertEqual(result.move_queue, ())
+
+    def test_previously_delivered_tool_may_leave_assist_tray(self) -> None:
+        assessment = VisualInventoryAssessment(
+            present_required_tools=("Pill", "Syringe"),
+            missing_tools=("XRay",),
+            assist_tray_tools=("Pill",),
+        )
+
+        result = InventoryResult.from_assessment(
+            self.case,
+            self.scenario,
+            assessment,
+            moved_tools=("XRay", "Pill"),
+            verification_tool="Pill",
+        )
+
+        self.assertEqual(result.missing_tools, ())
+        self.assertEqual(result.move_queue, ("Syringe",))
+        self.assertEqual(result.moved_tools, ("XRay", "Pill"))
 
 
 class ModelLoaderTest(unittest.TestCase):
@@ -175,14 +218,17 @@ class PromptBuilderTest(unittest.TestCase):
             case_id="CASE_2026_001",
             disease_name="폐렴",
             required_tools=("XRay", "Pill", "Syringe"),
-            yolo_detections=({"class_id": "XRay", "confidence": 0.96},),
         )
 
-        self.assertIn("등록되지 않은 질환입니다.", prompt.system_text)
+        self.assertIn("[해야 할 것]", prompt.system_text)
+        self.assertIn("[하지 말아야 할 것]", prompt.system_text)
+        self.assertIn("물품을 인식하지 않는다", prompt.system_text)
         runtime = json.loads(prompt.user_text)
         self.assertEqual(runtime["required_tools"], ["XRay", "Pill", "Syringe"])
+        self.assertIsNone(runtime["verification_tool"])
+        self.assertNotIn("safety_state", runtime)
+        self.assertNotIn("yolo_detections", runtime)
         self.assertNotIn("scene_tools", runtime)
-
 
 class QwenVisionInventoryBackendTest(unittest.TestCase):
     def test_assess_builds_deterministic_request_and_parses_output(self) -> None:

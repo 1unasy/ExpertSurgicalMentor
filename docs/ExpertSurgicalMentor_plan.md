@@ -96,10 +96,9 @@ MVP에서 허용하는 질환은 다음 세 가지로 한정한다.
 
 | 기능 | 담당 | 실행 주기 |
 |---|---|---|
-| 손·등록 물품·미등록 물체 검출 | YOLO | 실시간, 목표 10~30 FPS |
-| 물품 위치와 신뢰도 추적 | YOLO | 실시간 |
+| 트레이 영역의 손 감지 | YOLO | 실시간, 목표 10~30 FPS |
 | 필요 물품과 현재 장면의 의미 비교 | VLM | 세션 시작·장면 변경·이동 직후 |
-| 이동 대상 목록 계산 | 규칙 기반 Inventory Manager | VLM/YOLO 결과 수신 시 |
+| 이동 대상 목록 계산 | 규칙 기반 Inventory Manager | VLM 결과 수신 시 |
 | 로봇 실행 허가·정지 | Safety Controller | 실시간 |
 | 사용자용 결과 요약 | VLM | 단계 종료·세션 종료 |
 
@@ -113,15 +112,11 @@ VLM은 영상 전체를 계속 스트리밍받는 대신 이벤트가 발생했�
   "case_id": "CASE_2026_001",
   "disease_name": "폐렴",
   "required_tools": ["XRay", "Pill", "Syringe"],
-  "yolo_detections": [
-    {"class_id": "XRay", "confidence": 0.96},
-    {"class_id": "Syringe", "confidence": 0.93}
-  ],
-  "image": "MainToolTray의 최신 대표 프레임"
+  "image": "MainToolTray와 AssistTray가 함께 보이는 최신 대표 프레임"
 }
 ```
 
-VLM에는 환자 ID, 질환명, 시나리오 Registry에서 가져온 필요 물품 목록, YOLO 검출 목록, 최신 카메라 프레임을 함께 제공한다. VLM이 질환에 필요한 물품을 자유 생성하게 하지 않고 Registry 결과를 기준으로 장면을 검토하도록 한다.
+VLM에는 환자 ID, 질환명, 시나리오 Registry에서 가져온 필요 물품 목록과 최신 카메라 프레임을 제공한다. YOLO 손 감지 상태는 VLM 입력이 아니라 별도 Safety Controller에서 사용한다. YOLO는 현재 물품을 인식하지 않으며, VLM이 두 트레이의 물품 종류와 위치를 판정한다. `hand_detected=true`이면 VLM 추론과 로봇 실행을 시작하지 않는다.
 
 ### 4.3 VLM의 출력
 
@@ -142,13 +137,14 @@ VLM에는 환자 ID, 질환명, 시나리오 Registry에서 가져온 필요 물
 `move_queue`는 다음 규칙으로 결정한다.
 
 ```text
-move_queue = required_tools와 present_required_tools의 교집합
+move_queue = required_tools 순서의 present_required_tools
+             - assist_tray_tools - moved_tools
 순서는 required_tools의 기존 순서를 유지
 ```
 
-없는 물품은 건너뛰되 `missing_tools`에 반드시 기록한다. VLM과 YOLO의 물품 존재 판단이 서로 다르면 로봇을 실행하지 않고 프레임을 다시 획득한다.
+없는 물품은 건너뛰되 `missing_tools`에 반드시 기록한다. VLM이 물품 또는 트레이 위치를 확신하지 못하면 로봇을 실행하지 않고 프레임을 다시 획득한다.
 
-VLM의 원시 판정에는 `assist_tray_tools`를 추가한다. 로봇의 이동 완료 이벤트를 받은 뒤 해당 물품이 후속 프레임의 `AssistTray`에서 확인된 경우에만 `moved_tools`에 반영한다. 단순히 작업 공간 어딘가에 보이는 것만으로 이동 성공으로 처리하지 않는다.
+VLM의 원시 판정에는 `assist_tray_tools`를 추가한다. 로봇의 이동 완료 이벤트를 받은 뒤 `verification_tool`로 지정된 이번 물품이 후속 프레임의 `AssistTray`에서 확인된 경우에만 `moved_tools`에 반영한다. 단순히 작업 공간 어딘가에 보이는 것만으로 이동 성공으로 처리하지 않는다. 이전에 확인된 `moved_tools`는 코드가 전달 이력으로 유지하므로 의료진이 AssistTray에서 가져간 뒤 다음 프레임에 보이지 않아도 성공 기록을 취소하지 않는다.
 
 ### 4.4 최종 사용자 출력
 
@@ -178,7 +174,7 @@ Scenario Registry
           ↓ required_tools
 Camera Frame Buffer ← 상단 카메라
           ↓ 대표 프레임
-YOLO Detection ───────────────┐
+YOLO Hand Detection ──────────┐
           ↓                   │
 VLM Inventory Checker         │
           ↓                   │
@@ -190,7 +186,7 @@ Robot Task Router
           ↓
 물체별 ACT Policy / Trajectory Replay
           ↓
-이동 후 YOLO + VLM 재확인
+이동 후 VLM 재확인
           ↓
 필요한 물품 / 옮긴 물품 / 없는 물품 리포트
 ```
@@ -203,10 +199,10 @@ Robot Task Router
 | `case_validator_node` | 환자 ID 형식과 등록 질환 검증 |
 | `scenario_registry_node` | 질환별 고정 물품 순서 제공 |
 | `camera_buffer_node` | 카메라 프레임을 유지하고 이벤트 시 대표 프레임 제공 |
-| `yolo_detection_node` | 손·물품·미등록 물체 검출과 위치 추적 |
+| `yolo_detection_node` | MainToolTray·AssistTray 영역의 손 감지 |
 | `vlm_inventory_node` | 영상과 필요 물품을 비교해 존재·누락 물품 JSON 생성 |
 | `inventory_manager_node` | `move_queue`, `moved_tools`, `missing_tools` 상태 관리 |
-| `safety_controller_node` | 손·이물질·판단 불일치 시 로봇 정지 |
+| `safety_controller_node` | 손 감지 시 로봇 정지 |
 | `robot_task_router_node` | 물체별 ACT 정책 또는 replay 선택 |
 | `session_report_node` | 최종 결과를 자연어와 JSON으로 출력 |
 
@@ -217,7 +213,7 @@ Robot Task Router
 | `/case/input` | `patient_id`, `case_id`, `disease_name` |
 | `/scenario/required_tools` | 질환별 필요 물품 순서 |
 | `/camera/keyframe` | VLM 검사용 대표 프레임 |
-| `/perception/detections` | YOLO 클래스, bbox, 중심점, 신뢰도 |
+| `/safety/hand_state` | YOLO 손 감지 여부 `hand_detected` |
 | `/inventory/state` | 필요·존재·누락·이동 완료 물품 |
 
 `/robot/move_completed`는 이전 케이스의 지연 이벤트를 차단할 수 있도록 `case_id`와 `tool_id`를 포함한 JSON으로 전달한다.
@@ -312,9 +308,9 @@ VLM 선택 기준은 일반 벤치마크 점수보다 다음 프로젝트 지표
 ### 8.2 2단계: 이벤트 기반 카메라 연결
 
 1. 카메라는 계속 프레임을 수집한다.
-2. YOLO는 실시간으로 물품과 손을 검출한다.
+2. YOLO는 실시간으로 두 트레이 영역의 손 진입 여부만 검출한다.
 3. 세션 시작, 물품 변화, 로봇 이동 완료 이벤트가 발생하면 대표 프레임을 선택한다.
-4. VLM은 대표 프레임과 YOLO 검출 목록을 함께 검토한다.
+4. 손이 감지되지 않은 경우에만 VLM이 대표 프레임에서 물품과 트레이 위치를 검토한다.
 5. Inventory Manager가 `move_queue`를 확정한다.
 6. 없는 물품은 건너뛰고 존재하는 물품만 로봇 라우터에 전달한다.
 
@@ -322,7 +318,7 @@ VLM 선택 기준은 일반 벤치마크 점수보다 다음 프로젝트 지표
 
 1. 물품 하나를 보조 트레이로 이동한다.
 2. MainToolTray와 AssistTray의 대표 프레임을 다시 획득한다.
-3. YOLO가 목표 물품의 이동 여부를 확인한다.
+3. VLM이 목표 물품이 MainToolTray에서 AssistTray로 이동했는지 확인한다.
 4. VLM이 현재 재고 상태를 다시 요약한다.
 5. 성공한 물품을 `moved_tools`에 추가한다.
 6. 실패하면 다음 물품으로 진행하지 않고 `MOVE_VERIFICATION_FAILED`를 출력한다.
@@ -339,32 +335,18 @@ VLM 선택 기준은 일반 벤치마크 점수보다 다음 프로젝트 지표
 
 ## 9. YOLO 안전정지
 
-로봇과 트레이는 무균 영역으로 가정한다. 큰 트레이 또는 작은 보조 트레이에서 손이나 등록되지 않은 물체가 감지되면 로봇을 정지한다.
+로봇과 트레이는 무균 영역으로 가정한다. 현재 YOLO는 큰 트레이 또는 작은 보조 트레이에 사람 손이 진입했는지만 감지하며, 손이 감지되면 로봇을 정지한다.
 
 ### 9.1 검출 대상
 
 ```text
 등록 클래스:
-- robot_arm
-- Syringe
-- Glasses
-- Pill
-- XRay
-
-위험 클래스:
 - hand
-
-미등록 물체:
-- 배경 차분 또는 세그멘테이션으로 새 영역을 찾았지만
-  등록 클래스나 robot_arm과 일치하지 않는 물체
 ```
 
 ### 9.2 정지 규칙
 
 - 손이 `MainToolTray` 또는 `AssistTray` ROI에 진입하면 즉시 정지한다.
-- 미등록 물체가 트레이 ROI에서 연속 프레임 동안 유지되면 정지한다.
-- YOLO와 VLM의 물품 존재 판단이 다르면 로봇 실행을 보류한다.
-- 검출 신뢰도가 기준 미만이면 해당 물품을 집지 않는다.
 - 안전 상태가 정상으로 돌아와도 자동 재개하지 않고 사용자가 확인한 뒤 재개한다.
 
 VLM은 안전정지 여부를 결정하거나 정지를 해제할 권한을 갖지 않는다.
@@ -478,14 +460,14 @@ YOLO 검출 예시는 다음과 같다.
 ### 11.3 팀원 3 — ROS 2·YOLO·로봇 통합 담당
 
 - [ ] 상단 카메라와 트레이 ROI 고정
-- [ ] 네 물품과 손 YOLO 검출 구현
-- [ ] 미등록 물체 검출 보조 로직 구현
+- [ ] 손 YOLO 검출과 트레이 ROI 진입 판정 구현
 - [ ] Camera Frame Buffer와 이벤트 트리거 구현
 - [ ] Inventory Manager 상태 전이 구현
 - [ ] Safety Controller와 수동 재개 구현
 - [ ] 물체별 ACT Policy Router 연결
 - [ ] 이동 전·후 검증과 최종 리포트 연결
 - [ ] 확장 시 픽셀-로봇 좌표 변환 캘리브레이션
+- [ ] 확장 시 네 물품 YOLO 검출 구현
 
 **주요 산출물**
 
@@ -511,16 +493,16 @@ YOLO 검출 예시는 다음과 같다.
 
 ### Phase 2 — 실시간 인식과 상태 관리
 
-1. YOLO 물품·손 검출을 연결한다.
+1. YOLO 손 감지를 연결한다.
 2. 카메라 대표 프레임 이벤트를 정의한다.
-3. VLM과 YOLO의 결과를 Inventory Manager에서 합친다.
+3. VLM 결과와 YOLO 손 감지 안전 상태를 Inventory Manager에서 합친다.
 4. 없는 물품을 건너뛰고 존재하는 물품만 `move_queue`에 넣는다.
 
 ### Phase 3 — ACT 연결
 
 1. 물체별 30개 ACT 학습 결과를 평가한다.
 2. VLM의 `move_queue` 순서대로 물체별 정책을 호출한다.
-3. 이동 후 YOLO와 VLM으로 성공 여부를 재확인한다.
+3. 이동 후 VLM으로 성공 여부를 재확인한다.
 4. 필요한 물품·옮긴 물품·없는 물품 리포트를 출력한다.
 
 ### Phase 4 — 조건부 YOLO+ACT 확장
@@ -544,7 +526,7 @@ YOLO 검출 예시는 다음과 같다.
 | 로봇 전달 | 네 물품 중 데모 대상 물품을 MainToolTray에서 AssistTray로 이동 |
 | 이동 검증 | 이동 성공 물품을 `moved_tools`에 기록 |
 | 최종 리포트 | 필요한 물품·옮긴 물품·없는 물품을 모두 출력 |
-| 안전 | 손 또는 미등록 물체가 트레이에 진입하면 즉시 정지 |
+| 안전 | 손이 트레이에 진입하면 즉시 정지 |
 | 모방학습 | 물체별 30개 학습 후 파지 성공률을 정량 평가 |
 | 조건부 확장 | 기준 미달 시 YOLO+ACT 위치 보정 전후 결과 비교 |
 
@@ -552,6 +534,6 @@ YOLO 검출 예시는 다음과 같다.
 
 ## 14. 최종 정의
 
-**ExpertSurgicalMentor**는 감기·폐렴·골절 세 가지 가상 질환 케이스를 입력받아 필요한 물품을 결정하고, VLM과 YOLO를 이용해 트레이에 실제로 존재하는 물품을 확인한 뒤 OMX-F가 존재하는 필요 물품만 보조 트레이로 옮기는 교육용 Physical AI 프로토타입이다.
+**ExpertSurgicalMentor**는 감기·폐렴·골절 세 가지 가상 질환 케이스를 입력받아 필요한 물품을 결정하고, VLM으로 트레이에 실제로 존재하는 물품을 확인한 뒤 OMX-F가 존재하는 필요 물품만 보조 트레이로 옮기는 교육용 Physical AI 프로토타입이다.
 
-VLM은 장면의 의미 해석과 재고 요약을 담당하고, YOLO는 실시간 물품·손·이물질 검출을 담당한다. 로봇 안전과 실행 여부는 규칙 기반 Safety Controller가 담당한다. 물체별 30개 모방학습을 우선 평가하며, 파지 정확도가 부족한 경우에만 YOLO 기반 위치 보정을 ACT에 결합하는 확장안을 적용한다.
+VLM은 두 트레이의 물품 인식·위치 판정과 재고 요약을 담당하고, YOLO는 실시간 손 감지만 담당한다. 로봇 안전과 실행 여부는 규칙 기반 Safety Controller가 담당한다. 물체별 30개 모방학습을 우선 평가하며, 파지 정확도가 부족한 경우에만 확장 단계에서 물품 검출용 YOLO를 추가해 ACT 위치 보정에 결합한다.

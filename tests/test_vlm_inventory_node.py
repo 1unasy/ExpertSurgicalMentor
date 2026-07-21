@@ -4,7 +4,10 @@ import unittest
 from collections import deque
 from pathlib import Path
 
-from expert_surgical_mentor.inventory_schema import VisualInventoryAssessment
+from expert_surgical_mentor.inventory_schema import (
+    InventoryContractError,
+    VisualInventoryAssessment,
+)
 from expert_surgical_mentor.prompt_builder import InventoryPrompt
 from expert_surgical_mentor.scenario_registry import ScenarioRegistry
 from expert_surgical_mentor.vlm_inventory_node import (
@@ -99,6 +102,25 @@ class InventoryWorkflowTest(unittest.TestCase):
 
         self.assertEqual(result.move_queue, ("XRay", "Syringe"))
         self.assertEqual(result.missing_tools, ("Pill",))
+
+    def test_hand_detection_stops_inventory_inference(self) -> None:
+        assessment = VisualInventoryAssessment(("Syringe", "Pill"), (), ())
+        backend = StubVisionBackend([assessment])
+        controller = VlmInventoryController(
+            InventoryWorkflow(self.registry, StubPromptBuilder(), backend)
+        )
+        controller.update_keyframe("frame")
+        controller.update_hand_detection(True)
+
+        with self.assertRaisesRegex(InventoryWorkflowError, "손이 감지"):
+            controller.handle_case_input(
+                {
+                    "patient_id": "P1COLD01",
+                    "case_id": "COLD_001",
+                    "disease_name": "감기",
+                }
+            )
+        self.assertEqual(len(backend.calls), 0)
 
     def test_move_completion_requires_latest_keyframe_and_queued_tool(self) -> None:
         all_present = VisualInventoryAssessment(
@@ -208,7 +230,7 @@ class InventoryWorkflowTest(unittest.TestCase):
         )
         controller.update_keyframe("failed-move")
 
-        with self.assertRaisesRegex(Exception, "보조 트레이"):
+        with self.assertRaisesRegex(InventoryContractError, "보조 트레이"):
             controller.handle_move_completed("Syringe")
 
     def test_failed_replacement_clears_previous_case(self) -> None:
@@ -251,7 +273,7 @@ class InventoryWorkflowTest(unittest.TestCase):
             ("Syringe", "Pill"), (), ("Syringe",)
         )
         after_pill = VisualInventoryAssessment(
-            ("Syringe", "Pill"), (), ("Syringe", "Pill")
+            ("Pill",), ("Syringe",), ("Pill",)
         )
         backend = StubVisionBackend([initial, after_syringe, after_pill])
         controller = VlmInventoryController(
