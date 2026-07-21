@@ -1,570 +1,531 @@
-# ExpertSurgicalMentor 기획안 초안
+# ExpertSurgicalMentor 기획안
 
 ## 1. 프로젝트 주제
 
 **프로젝트명:** 숙련 수술 멘토 (**ExpertSurgicalMentor**)
 
 **프로젝트 한 줄 정의:**  
-가상 수술 케이스를 입력하면 VLM이 필요한 절차와 도구 순서를 생성하고, **OMX-AI 기반 모방학습 로봇팔**이 큰 트레이에 있는 도구를 현재 작업에 맞춰 **앞쪽 작은 보조 트레이**로 옮겨 주며, 카메라가 수련자의 도구 선택과 수행 순서를 추적해 피드백을 제공하는 수술 교육 보조 시스템이다.
+질환명이 포함된 비식별 가상 케이스를 입력하면 VLM이 등록된 시나리오에서 필요한 물품 순서를 조회하고, 카메라 영상에서 현재 트레이에 있는 물품과 없는 물품을 구분한다. OMX-AI 기반 모방학습 로봇팔은 실제로 존재하는 필요 물품만 큰 트레이에서 작은 보조 트레이로 옮기며, 시스템은 필요한 물품·옮긴 물품·없는 물품을 정리해 알려준다.
 
-> 본 프로젝트는 실제 환자 수술을 지시하거나 의료적 정확성을 보증하는 시스템이 아니다. 장난감 도구와 가상 시나리오를 사용하는 3일 교육용 MVP이다.
-
----
-
-## 2. 프로젝트 배경
-
-수술 교육은 반복 연습이 중요하지만 실제 환자 데이터 확보, 안전 문제, 숙련자 지도 시간의 제약으로 인해 충분한 반복 훈련 환경을 구성하기 어렵다. 특히 초급 수련자는 다음과 같은 정보를 지속적으로 안내받을 필요가 있다.
-
-- 현재 수행해야 할 단계
-- 해당 단계에 필요한 도구
-- 도구를 적용해야 하는 연습 구역
-- 올바른 단계 순서
-- 잘못된 도구 또는 순서를 선택했을 때의 교정 피드백
-
-본 프로젝트는 실제 임상 데이터를 사용하지 않고, **가상 케이스·장난감 의료 도구·표시된 연습 구역**을 활용한다. 실제 의료 전문가의 술기 데이터 대신 팀원이 OMX-L을 조작해 생성한 도구 이송 궤적을 사용하며, OMX-F는 직접 수술하지 않고 **수술 보조자처럼 필요한 도구를 큰 트레이에서 작은 보조 트레이로 옮기는 역할**을 담당한다.
+> 본 프로젝트는 실제 환자를 진단하거나 의료행위를 지시하는 시스템이 아니다. 실제 환자와 연결되지 않는 임의의 환자 ID, 장난감 도구, 가상 질환 시나리오를 사용하는 교육용 MVP이다.
 
 ---
 
-## 3. 대목표
+## 2. MVP 범위와 핵심 결정
 
-가상 수술 케이스 입력부터 도구 전달, 수행 추적, 피드백까지 이어지는 **ROS 2 기반 VLM + 모방학습 통합 MVP**를 구현한다.
+### 2.1 등록 질환
 
-1. VLM이 케이스별 Procedure–Phase–Step–Action 절차를 생성한다.
-2. 각 Step에 필요한 도구와 대상 위치를 구조화한다.
-3. OMX-F가 필요한 도구를 큰 트레이에서 작은 보조 트레이로 옮긴다.
-4. 카메라가 수련자의 도구 선택과 작업 구역을 추적한다.
-5. 기대 행동과 실제 행동을 비교해 오류 코드와 피드백을 생성한다.
+MVP에서 허용하는 질환은 다음 세 가지로 한정한다.
 
----
-
-## 4. 세부목표
-
-| 구분 | 세부목표 |
-|---|---|
-| 가상 케이스 | 환자 개인정보 없이 수술 종류, 부위, 난이도, 도구 순서를 JSON으로 정의 |
-| 절차 표현 | `Procedure → Phase → Step → Action` 계층과 `Instrument + Verb + Target` 표현 적용 |
-| VLM 계획 | 케이스별 단계, 도구, 대상 구역, 다음 행동을 JSON으로 출력 |
-| 모방학습 | OMX-L 교시로 큰 트레이 → 작은 트레이 도구 이송 데이터를 수집 |
-| 로봇 제어 | OMX-F가 지정 도구를 안전하게 Pick-and-Place하도록 구현 |
-| 시각 인식 | 큰 트레이, 작은 트레이, 도구, 약품, 수련자 손 및 연습 구역 검출 |
-| 단계 추적 | WrongTool, WrongOrder, WrongTarget, MissedStep, WrongZone 판단 |
-| 피드백 | 현재 오류와 다음 행동을 짧은 자연어로 제공 |
-
----
-
-## 5. 시스템 아키텍처
-
-![시스템 아키텍처](./시스템_아키텍처_다이어그램.png)
-
-### 5.1 계층별 구성
-
-| 계층 | 주요 모듈 | 역할 |
+| Scenario ID | 질환 | 필요한 물품 순서 |
 |---|---|---|
-| 계획·추론 | VLM Case Planner, Procedure Graph Generator, Feedback Generator | 케이스 해석, 절차 생성, 피드백 생성 |
-| 인지·추적 | Camera Calibration, Hand & Tool Detection, Step Tracker, Safety Check | 작업 공간 인식, 도구·손 추적, 단계 및 안전 판정 |
-| 제어·모방학습 | Dataset Recorder, Imitation Policy, OMX Follower Controller, OMX Hardware Interface | 교시 데이터 수집, 정책 추론, OMX-F 제어 |
+| `SIM_COLD` | 감기 | `Syringe → Pill` |
+| `SIM_PNEUMONIA` | 폐렴 | `XRay → Pill → Syringe` |
+| `SIM_FRACTURE` | 골절 | `Glasses → XRay → Pill` |
 
-### 5.2 하드웨어 역할
+위 순서는 실제 임상 지침이 아니라 프로젝트에서 정의한 교육용 가상 순서다.
 
-- **User PC:** 케이스 입력, 현재 단계와 결과 확인
-- **상단 카메라:** 큰 트레이, 작은 트레이, 도구, 약품, 손, 연습 구역 관찰
-- **OMX-L:** 사람이 직접 조작하는 Leader 교시 장치
-- **OMX-F:** 필요한 도구를 큰 트레이에서 작은 보조 트레이로 옮기는 Follower
-- **큰 트레이:** 사용 가능한 전체 도구와 약품의 초기 위치
-- **작은 보조 트레이:** 현재 Step에 필요한 도구를 수련자에게 제공하는 고정 Handoff Zone
+등록되지 않은 질환이 입력되면 VLM이 유사 질환이나 새로운 도구 순서를 임의로 생성하지 않고 다음 문장만 반환한다.
 
----
-
-## 6. VLM + 모방학습 기반 시스템 구현 프로세스
-
-```text
-가상 수술 케이스 입력
-    ↓
-VLM Case Planner
-    ↓
-Procedure → Phase → Step → Action 생성
-    ↓
-Step별 필요 도구·대상 구역 결정
-    ↓
-카메라 캘리브레이션 및 작업 구역 좌표 설정
-    ↓
-OMX-L Leader 교시 데이터 수집
-    ↓
-영상 + 관절 상태 + 그리퍼 상태 동기화
-    ↓
-LeRobot Dataset 또는 ROS 2 Dataset 구성
-    ↓
-Trajectory Replay / Behavior Cloning / ACT 학습
-    ↓
-OMX-F: 큰 트레이 → 작은 보조 트레이 도구 전달
-    ↓
-수련자: 작은 보조 트레이의 도구 사용
-    ↓
-카메라 기반 도구·손·작업 구역 추적
-    ↓
-기대 Action과 관찰 Action 비교
-    ↓
-정상 또는 오류 코드 생성
-    ↓
-VLM Feedback Generator
-    ↓
-화면 피드백 및 수행 결과 리포트
-```
-
-### 6.1 구현 단계
-
-1. **작업 공간 고정**  
-   큰 트레이, 작은 트레이, 연습 구역을 테이프로 고정하고 좌표를 변경하지 않는다.
-
-2. **카메라 캘리브레이션**  
-   카메라 내부 파라미터를 확인하고, 상단 영상에서 각 구역의 픽셀 좌표 또는 카메라 3차원 좌표를 정의한다.
-
-3. **도구별 Pick/Place 위치 정의**  
-   각 도구의 초기 위치와 작은 보조 트레이의 배치 위치를 OMX-F 기준 waypoint로 저장한다.
-
-4. **Leader 교시 데이터 수집**  
-   OMX-L을 조작하여 도구별 `Home → Pick → Lift → Move → Place → Home` 궤적을 반복 수집한다.
-
-5. **모방학습 데이터 구성**  
-   카메라 프레임, 관절 위치, 그리퍼 상태, 도구 ID, 작업 ID를 동일 timestamp로 저장한다.
-
-6. **정책 학습 또는 궤적 재생**  
-   3일 MVP에서는 trajectory replay를 기본 안정 경로로 확보하고, 시간이 허용되면 Behavior Cloning 또는 ACT를 학습한다.
-
-7. **VLM 계획 연결**  
-   VLM이 출력한 `required_instrument`를 ROS 2 작업 명령으로 변환하여 해당 도구 전달 정책을 실행한다.
-
-8. **수련자 단계 평가**  
-   수련자가 작은 트레이에서 도구를 가져갔는지, 지정된 연습 구역에 적용했는지, 순서가 맞는지를 규칙 기반 Step Tracker로 판정한다.
-
----
-
-## 7. 데이터셋: 수술 시나리오 개요
-
-![수술 도구 배치 환경](./수술_도구_배치_환경.jpg)
-
-### 7.1 사용 가능한 도구 및 객체
-
-| ID | 한글명 | 영문명 | 분류 | MVP 역할 |
-|---|---|---|---|---|
-| T01 | 장난감 주사기 | `ToySyringe` | 도구 | 모의 세척 및 액체 처치 동작 |
-| T02 | 주황색 집게 | `OrangeForceps` | 도구 | 대상 고정, 파지, 들어 올리기 |
-| T03 | 노란색 가위 | `YellowScissors` | 도구 | 연습용 종이 표시선 또는 모의 실 절단 |
-| M01 | 노란색 약품 | `YellowMedication` | 약품 모형 | 색상 기반 약품 선택·전달 훈련 |
-| M02 | 주황색 약품 | `OrangeMedication` | 약품 모형 | 색상 기반 약품 선택·전달 훈련 |
-| Z01 | 큰 트레이 | `MainToolTray` | 구역 | 모든 도구와 약품의 초기 위치 |
-| Z02 | 작은 보조 트레이 | `AssistTray` | 구역 | 현재 Step에 필요한 도구의 전달 위치 |
-| Z03 | 연습 구역 | `PracticeZone` | 구역 | 수련자가 모의 처치를 수행하는 위치 |
-| Z04 | 반납 구역 | `ReturnZone` | 구역 | 사용 완료 도구를 되돌려 놓는 위치 |
-
-### 7.2 고정 좌표 및 세부 Target
-
-수련자 행동을 정확하게 평가하기 위해 테이블 위에 다음 표식을 부착한다.
-
-| Target ID | 설명 |
-|---|---|
-| `PracticeZone.Center` | 연습 카드 중앙의 상처 표시 영역 |
-| `PracticeZone.Start` | 표시선의 시작점 |
-| `PracticeZone.End` | 표시선의 종료점 |
-| `PracticeZone.LeftEdge` | 상처 표시의 왼쪽 가장자리 |
-| `PracticeZone.RightEdge` | 상처 표시의 오른쪽 가장자리 |
-| `PracticeZone.CutPointA` | 연습용 종이 실 또는 표시선을 자르는 지점 |
-| `AssistTray.Center` | 로봇이 도구를 내려놓는 기본 위치 |
-| `AssistTray.Left/Right` | 두 개 이상의 도구를 순차 배치하는 위치 |
-| `MainToolTray.MedYellow` | 노란색 약품 초기 위치 |
-| `MainToolTray.MedOrange` | 주황색 약품 초기 위치 |
-
-### 7.3 데이터셋 종류
-
-| 데이터셋 | 입력 | 정답·출력 | 사용 목적 |
-|---|---|---|---|
-| Case–Plan Dataset | 가상 케이스 JSON | 단계, 필요 도구, Target, 오류 규칙 | VLM 절차 계획 |
-| Tool Delivery Dataset | 카메라 영상, 관절 상태, 그리퍼 상태, 작업 ID | 도구별 이송 궤적 | 모방학습 및 OMX-F 제어 |
-| Error–Feedback Dataset | 현재 Step, 검출 도구, 손 위치, 작업 구역 | 오류 코드, 다음 Action, 피드백 | 수행 평가 |
-
----
-
-## 8. 수술 프로세스 계층 정의
-
-```text
-Procedure
-  └─ Phase
-       └─ Step
-            └─ Action
-```
-
-각 Action은 다음과 같이 정의한다.
-
-```text
-Action = Actor + Instrument/Object + Verb + Target
-```
-
-예시:
-
-- `Robot + ToySyringe + Pick + MainToolTray`
-- `Robot + ToySyringe + Place + AssistTray.Center`
-- `Trainee + OrangeForceps + Hold + PracticeZone.LeftEdge`
-- `Trainee + YellowScissors + Cut + PracticeZone.CutPointA`
-- `Robot + YellowMedication + Place + AssistTray.Center`
-
----
-
-## 9. 가상 시나리오 10종
-
-아래 시나리오는 실제 수술 술기 지침이 아니라, 현재 보유한 장난감 도구를 이용해 **도구 선택·순서·전달·작업 구역 준수**를 평가하기 위한 교육용 가상 시나리오다.
-
-### 9.1 가상 봉합 수술 보조 케이스
-
-**Case ID:** `SIM_SUTURE_001`  
-**목표:** 봉합 전 준비부터 모의 절단 및 종료 정리까지 도구 순서를 학습한다.  
-**도구 순서:** 주사기 → 주황색 집게 → 노란색 가위
-
-| Step | 수행 주체 | 도구·객체 | 행동 | 정확한 Target |
-|---|---|---|---|---|
-| 1 | VLM | Case | 수술 절차와 도구 순서 생성 | Procedure Graph |
-| 2 | Robot | ToySyringe | Pick 후 Place | `MainToolTray → AssistTray.Center` |
-| 3 | Trainee | ToySyringe | 상처 표시선 세척 동작 | `PracticeZone.Start → PracticeZone.End` |
-| 4 | Robot | OrangeForceps | Pick 후 Place | `MainToolTray → AssistTray.Left` |
-| 5 | Trainee | OrangeForceps | 상처 가장자리 고정 동작 | `PracticeZone.LeftEdge` 후 `RightEdge` |
-| 6 | Robot | YellowScissors | Pick 후 Place | `MainToolTray → AssistTray.Right` |
-| 7 | Trainee | YellowScissors | 연습용 종이 표시선 절단 | `PracticeZone.CutPointA` |
-| 8 | Trainee | 모든 도구 | 사용 완료 후 반납 | `ReturnZone` |
-| 9 | System | Session | 도구 순서와 Target 일치 평가 | 결과 리포트 |
-
-**오류 예:** 가위를 세척 전에 선택, 집게로 `CutPointA` 접근, 도구 미반납
-
----
-
-### 9.2 가상 봉합사 제거 케이스
-
-**Case ID:** `SIM_SUTURE_REMOVE_001`  
-**목표:** 종이 또는 실 모형을 집게로 들어 올린 후 가위로 지정 지점을 절단하는 순서를 학습한다.  
-**도구 순서:** 주황색 집게 → 노란색 가위 → 주황색 집게
-
-| Step | 수행 주체 | 도구·객체 | 행동 | 정확한 Target |
-|---|---|---|---|---|
-| 1 | Robot | OrangeForceps | 전달 | `AssistTray.Left` |
-| 2 | Trainee | OrangeForceps | 모의 실의 왼쪽 끝을 들어 올림 | `PracticeZone.LeftEdge` |
-| 3 | Robot | YellowScissors | 전달 | `AssistTray.Right` |
-| 4 | Trainee | YellowScissors | 지정 절단점 절단 | `PracticeZone.CutPointA` |
-| 5 | Trainee | OrangeForceps | 절단된 모형 제거 | `PracticeZone.Center` |
-| 6 | Trainee | OrangeForceps | 제거물을 반납 구역에 놓음 | `ReturnZone` |
-| 7 | System | Session | Lift → Cut → Remove 순서 평가 | 결과 리포트 |
-
-**오류 예:** 실을 들어 올리기 전에 절단, `CutPointA`가 아닌 위치 절단
-
----
-
-### 9.3 가상 상처 세척 케이스
-
-**Case ID:** `SIM_IRRIGATION_001`  
-**목표:** 주사기 선택과 세척 방향을 평가한다.  
-**도구 순서:** 주사기
-
-| Step | 수행 주체 | 도구·객체 | 행동 | 정확한 Target |
-|---|---|---|---|---|
-| 1 | Robot | ToySyringe | 전달 | `AssistTray.Center` |
-| 2 | Trainee | ToySyringe | 파지 | `AssistTray.Center` |
-| 3 | Trainee | ToySyringe | 세척 시작 | `PracticeZone.Start` |
-| 4 | Trainee | ToySyringe | 일정 방향으로 이동 | `PracticeZone.Start → End` |
-| 5 | Trainee | ToySyringe | 종료 및 반납 | `ReturnZone` |
-| 6 | System | Session | 올바른 도구와 이동 방향 평가 | 결과 리포트 |
-
-**오류 예:** 집게 선택, End에서 Start 방향으로 수행, 연습 구역 밖에서 수행
-
----
-
-### 9.4 가상 절개 보조 케이스
-
-**Case ID:** `SIM_INCISION_ASSIST_001`  
-**목표:** 집게로 지정 위치를 고정하고 가위로 표시선을 따라 이동하는 도구 교환 순서를 학습한다.  
-**도구 순서:** 주황색 집게 → 노란색 가위
-
-| Step | 수행 주체 | 도구·객체 | 행동 | 정확한 Target |
-|---|---|---|---|---|
-| 1 | Robot | OrangeForceps | 전달 | `AssistTray.Left` |
-| 2 | Trainee | OrangeForceps | 왼쪽 가장자리 고정 | `PracticeZone.LeftEdge` |
-| 3 | Robot | YellowScissors | 전달 | `AssistTray.Right` |
-| 4 | Trainee | YellowScissors | 표시선을 따라 이동 및 모의 절단 | `PracticeZone.Start → End` |
-| 5 | Trainee | 도구 | 반납 | `ReturnZone` |
-| 6 | System | Session | 집게 고정이 선행되었는지 평가 | 결과 리포트 |
-
-**오류 예:** 집게 고정 없이 가위 사용, 표시선 밖으로 이동
-
----
-
-### 9.5 가상 조직 고정 보조 케이스
-
-**Case ID:** `SIM_HOLDING_001`  
-**목표:** 주황색 집게로 지정된 좌우 위치를 순서대로 고정하는 동작을 평가한다.  
-**도구 순서:** 주황색 집게
-
-| Step | 수행 주체 | 도구·객체 | 행동 | 정확한 Target |
-|---|---|---|---|---|
-| 1 | Robot | OrangeForceps | 전달 | `AssistTray.Center` |
-| 2 | Trainee | OrangeForceps | 첫 번째 위치 고정 | `PracticeZone.LeftEdge` |
-| 3 | Trainee | OrangeForceps | 두 번째 위치로 이동 | `PracticeZone.RightEdge` |
-| 4 | Trainee | OrangeForceps | 중앙 위치 확인 | `PracticeZone.Center` |
-| 5 | Trainee | OrangeForceps | 반납 | `ReturnZone` |
-| 6 | System | Session | Left → Right → Center 순서 평가 | 결과 리포트 |
-
-**오류 예:** 오른쪽부터 시작, 중앙 구역 누락, 가위 선택
-
----
-
-### 9.6 가상 수술 중 도구 교환 케이스
-
-**Case ID:** `SIM_TOOL_EXCHANGE_001`  
-**목표:** 현재 사용 도구를 반납한 뒤 다음 도구를 받는 교환 절차를 평가한다.  
-**도구 순서:** 주사기 → 주황색 집게 → 노란색 가위
-
-| Step | 수행 주체 | 도구·객체 | 행동 | 정확한 Target |
-|---|---|---|---|---|
-| 1 | Robot | ToySyringe | 전달 | `AssistTray.Center` |
-| 2 | Trainee | ToySyringe | 작업 후 반납 | `ReturnZone` |
-| 3 | Robot | OrangeForceps | 전달 | `AssistTray.Center` |
-| 4 | Trainee | OrangeForceps | 작업 후 반납 | `ReturnZone` |
-| 5 | Robot | YellowScissors | 전달 | `AssistTray.Center` |
-| 6 | Trainee | YellowScissors | 작업 후 반납 | `ReturnZone` |
-| 7 | System | Session | 이전 도구 반납 후 다음 도구가 사용됐는지 평가 | 결과 리포트 |
-
-**오류 예:** 이전 도구가 작은 트레이에 남은 상태에서 다음 도구 사용
-
----
-
-### 9.7 가상 노란색 약품 준비 케이스
-
-**Case ID:** `SIM_MED_YELLOW_001`  
-**목표:** VLM의 약품 색상 지시에 따라 정확한 약품 모형을 선택하고 작은 트레이로 전달한다. 실제 약물명이나 용량은 다루지 않는다.  
-**도구·객체 순서:** 노란색 약품
-
-| Step | 수행 주체 | 도구·객체 | 행동 | 정확한 Target |
-|---|---|---|---|---|
-| 1 | VLM | Medication Order | `YellowMedication` 요청 | Case Plan |
-| 2 | Camera | YellowMedication | 위치 확인 | `MainToolTray.MedYellow` |
-| 3 | Robot | YellowMedication | Pick | `MainToolTray.MedYellow` |
-| 4 | Robot | YellowMedication | Place | `AssistTray.Center` |
-| 5 | Trainee | YellowMedication | 색상 확인 | `AssistTray.Center` |
-| 6 | System | Session | 요청 색상과 전달 색상 일치 평가 | 결과 리포트 |
-
-**오류 예:** 주황색 약품 전달, 약품을 도구 영역에 배치
-
----
-
-### 9.8 가상 주황색 약품 준비 케이스
-
-**Case ID:** `SIM_MED_ORANGE_001`  
-**목표:** 주황색 약품 모형의 정확한 선택과 전달을 평가한다.  
-**도구·객체 순서:** 주황색 약품
-
-| Step | 수행 주체 | 도구·객체 | 행동 | 정확한 Target |
-|---|---|---|---|---|
-| 1 | VLM | Medication Order | `OrangeMedication` 요청 | Case Plan |
-| 2 | Camera | OrangeMedication | 위치 확인 | `MainToolTray.MedOrange` |
-| 3 | Robot | OrangeMedication | Pick | `MainToolTray.MedOrange` |
-| 4 | Robot | OrangeMedication | Place | `AssistTray.Center` |
-| 5 | Trainee | OrangeMedication | 요청 정보와 색상 대조 | `AssistTray.Center` |
-| 6 | System | Session | 요청·검출·수령 결과 일치 평가 | 결과 리포트 |
-
-**오류 예:** 노란색 약품 선택, 약품 검출 신뢰도가 낮은데 로봇 실행
-
----
-
-### 9.9 가상 약품 변경 및 오류 교정 케이스
-
-**Case ID:** `SIM_MED_CHANGE_001`  
-**목표:** 잘못 전달된 약품을 회수하고 수정된 약품을 다시 제공하는 오류 복구 절차를 평가한다.  
-**도구·객체 순서:** 노란색 약품 회수 → 주황색 약품 전달
-
-| Step | 수행 주체 | 도구·객체 | 행동 | 정확한 Target |
-|---|---|---|---|---|
-| 1 | Robot | YellowMedication | 최초 전달 | `AssistTray.Center` |
-| 2 | System | Case Plan | 요청 불일치 감지 | Expected=`OrangeMedication` |
-| 3 | Feedback | Message | 사용 중지 및 회수 안내 | User PC |
-| 4 | Robot | YellowMedication | 회수 | `AssistTray.Center → MainToolTray.MedYellow` |
-| 5 | Robot | OrangeMedication | 재전달 | `MainToolTray.MedOrange → AssistTray.Center` |
-| 6 | Trainee | OrangeMedication | 최종 확인 | `AssistTray.Center` |
-| 7 | System | Session | 오류 복구 성공 여부 기록 | 결과 리포트 |
-
-**오류 예:** 잘못된 약품을 회수하지 않고 다음 약품 추가, 변경 지시 무시
-
----
-
-### 9.10 가상 수술 종료 및 도구 회수 케이스
-
-**Case ID:** `SIM_CLOSEOUT_001`  
-**목표:** 사용한 도구와 약품 모형을 정해진 위치로 회수하고 수량 및 위치를 확인한다.  
-**회수 대상:** 주사기, 주황색 집게, 노란색 가위, 사용된 약품 모형
-
-| Step | 수행 주체 | 도구·객체 | 행동 | 정확한 Target |
-|---|---|---|---|---|
-| 1 | System | Session | 종료 단계 진입 | Completion Phase |
-| 2 | Trainee | 사용 도구 | 작은 트레이 또는 반납 구역에 정렬 | `ReturnZone` |
-| 3 | Camera | ToySyringe | 존재 및 위치 확인 | `ReturnZone` |
-| 4 | Camera | OrangeForceps | 존재 및 위치 확인 | `ReturnZone` |
-| 5 | Camera | YellowScissors | 존재 및 위치 확인 | `ReturnZone` |
-| 6 | Robot | 각 도구 | 원래 위치로 회수 | `MainToolTray`의 지정 슬롯 |
-| 7 | System | Medication | 약품 모형 수량 및 색상 확인 | `MedYellow`, `MedOrange` 슬롯 |
-| 8 | System | Session | 누락·오배치·미회수 항목 출력 | 결과 리포트 |
-
-**오류 예:** 가위 누락, 집게와 주사기 위치 교환, 약품 모형이 작은 트레이에 남음
-
----
-
-## 10. 가상 케이스 데이터 예시
+> 등록되지 않은 질환입니다.
 
 ```json
 {
-  "case_id": "SIM_SUTURE_001",
-  "case_name": "가상 봉합 수술 보조 케이스",
-  "procedure": "SimulatedSutureAssistance",
-  "difficulty": "Beginner",
-  "available_tools": [
-    "ToySyringe",
-    "OrangeForceps",
-    "YellowScissors",
-    "YellowMedication",
-    "OrangeMedication"
+  "status": "unsupported_disease",
+  "message": "등록되지 않은 질환입니다."
+}
+```
+
+### 2.2 사용 물품
+
+| ID | 한글명 | 시스템 ID | 물리 객체 정의 |
+|---|---|---|---|
+| T01 | 장난감 주사기 | `Syringe` | 바늘이 없는 장난감 주사기 |
+| T02 | 안경 | `Glasses` | 교육용 안경 또는 보호안경 모형 |
+| T03 | 알약 | `Pill` | 복용할 수 없는 알약 모형 |
+| T04 | X-ray | `XRay` | X-ray 이미지 카드 또는 필름 모형 |
+
+### 2.3 범위 밖 항목
+
+- 실제 환자 개인정보 입력
+- 실제 진단, 처방, 투약, 약물명 또는 용량 생성
+- 등록되지 않은 질환에 대한 의료 추론
+- VLM 판단만으로 로봇을 직접 실행하거나 안전정지를 해제하는 기능
+- 로봇이 사람 손에 직접 물품을 건네는 동작
+
+---
+
+## 3. 가상 케이스 입력 계약
+
+환자정보는 `patient_id` 하나만 사용한다. `patient_id`는 실제 환자와 연결되지 않는 임의의 영문·숫자 조합으로 생성한다.
+
+```json
+{
+  "patient_id": "PT7A21B",
+  "case_id": "CASE_2026_001",
+  "disease_name": "폐렴"
+}
+```
+
+### 3.1 입력 검증 규칙
+
+- `patient_id`는 영문과 숫자로만 구성한다.
+- 영문과 숫자를 각각 하나 이상 포함한다.
+- 이름, 생년월일, 전화번호, 이메일, 병원 등록번호는 입력하지 않는다.
+- 한 케이스에는 질환 하나만 입력한다.
+- 허용 질환은 `감기`, `폐렴`, `골절` 세 가지뿐이다.
+- 실제 환자와 연결되는 별도 대응표를 만들지 않는다.
+
+질환이 두 개 이상이면 `질환은 하나만 입력해 주세요.`를 반환하고, 등록되지 않은 질환이면 `등록되지 않은 질환입니다.`를 반환한다.
+
+---
+
+## 4. VLM 활용 방향
+
+### 4.1 VLM을 사용하는 이유
+
+이 프로젝트에서 LLM 대신 VLM을 사용하는 선택은 타당하다. 텍스트 케이스만 해석하는 것이 아니라 카메라 영상을 함께 받아 다음 정보를 판단해야 하기 때문이다.
+
+1. 질환에 필요한 물품 목록은 무엇인가
+2. 큰 트레이에 필요한 물품이 실제로 있는가
+3. 필요한 물품 중 없는 것은 무엇인가
+4. 현재 옮길 수 있는 물품은 무엇인가
+5. 이동 후 어떤 물품이 보조 트레이에 놓였는가
+
+다만 VLM을 매 카메라 프레임마다 실행하는 방식은 사용하지 않는다. VLM은 지연이 크고 출력이 매번 달라질 수 있으며, 현재 PC의 8GB VRAM을 ACT 정책과 공유해야 한다. 따라서 다음과 같이 역할을 분리한다.
+
+| 기능 | 담당 | 실행 주기 |
+|---|---|---|
+| 손·등록 물품·미등록 물체 검출 | YOLO | 실시간, 목표 10~30 FPS |
+| 물품 위치와 신뢰도 추적 | YOLO | 실시간 |
+| 필요 물품과 현재 장면의 의미 비교 | VLM | 세션 시작·장면 변경·이동 직후 |
+| 이동 대상 목록 계산 | 규칙 기반 Inventory Manager | VLM/YOLO 결과 수신 시 |
+| 로봇 실행 허가·정지 | Safety Controller | 실시간 |
+| 사용자용 결과 요약 | VLM | 단계 종료·세션 종료 |
+
+VLM은 영상 전체를 계속 스트리밍받는 대신 이벤트가 발생했을 때 선명한 대표 프레임 또는 짧은 프레임 묶음을 받는다.
+
+### 4.2 VLM의 입력
+
+```json
+{
+  "patient_id": "PT7A21B",
+  "case_id": "CASE_2026_001",
+  "disease_name": "폐렴",
+  "required_tools": ["XRay", "Pill", "Syringe"],
+  "yolo_detections": [
+    {"class_id": "XRay", "confidence": 0.96},
+    {"class_id": "Syringe", "confidence": 0.93}
   ],
-  "required_tool_order": [
-    "ToySyringe",
-    "OrangeForceps",
-    "YellowScissors"
-  ],
-  "robot_role": "Move required items from MainToolTray to AssistTray",
-  "expected_actions": [
-    {
-      "step_id": 1,
-      "actor": "Robot",
-      "instrument": "ToySyringe",
-      "verb": "Place",
-      "target": "AssistTray.Center"
-    },
-    {
-      "step_id": 2,
-      "actor": "Trainee",
-      "instrument": "ToySyringe",
-      "verb": "SimulateIrrigation",
-      "target": "PracticeZone.StartToEnd"
-    }
-  ],
-  "error_rules": [
-    "WrongTool",
-    "WrongOrder",
-    "WrongTarget",
-    "MissedStep",
-    "WrongZone"
-  ]
+  "image": "MainToolTray의 최신 대표 프레임"
+}
+```
+
+VLM에는 환자 ID, 질환명, 시나리오 Registry에서 가져온 필요 물품 목록, YOLO 검출 목록, 최신 카메라 프레임을 함께 제공한다. VLM이 질환에 필요한 물품을 자유 생성하게 하지 않고 Registry 결과를 기준으로 장면을 검토하도록 한다.
+
+### 4.3 VLM의 출력
+
+```json
+{
+  "status": "ready_with_missing_tools",
+  "patient_id": "PT7A21B",
+  "case_id": "CASE_2026_001",
+  "scenario_id": "SIM_PNEUMONIA",
+  "required_tools": ["XRay", "Pill", "Syringe"],
+  "present_required_tools": ["XRay", "Syringe"],
+  "missing_tools": ["Pill"],
+  "move_queue": ["XRay", "Syringe"],
+  "moved_tools": []
+}
+```
+
+`move_queue`는 다음 규칙으로 결정한다.
+
+```text
+move_queue = required_tools와 present_required_tools의 교집합
+순서는 required_tools의 기존 순서를 유지
+```
+
+없는 물품은 건너뛰되 `missing_tools`에 반드시 기록한다. VLM과 YOLO의 물품 존재 판단이 서로 다르면 로봇을 실행하지 않고 프레임을 다시 획득한다.
+
+### 4.4 최종 사용자 출력
+
+```json
+{
+  "patient_id": "PT7A21B",
+  "disease_name": "폐렴",
+  "required_tools": ["XRay", "Pill", "Syringe"],
+  "moved_tools": ["XRay", "Syringe"],
+  "missing_tools": ["Pill"],
+  "message": "필요한 물품은 X-ray, 알약, 주사기입니다. X-ray와 주사기를 옮겼으며 알약은 트레이에 없어 건너뛰었습니다."
 }
 ```
 
 ---
 
-## 11. 3인 기능별 To Do List
+## 5. 시스템 아키텍처
 
-### 11.1 팀원 1 — VLM·가상 시나리오·피드백 담당
+```text
+가상 케이스 입력
+    ↓
+Case Validator
+    ├─ 미등록 질환 → "등록되지 않은 질환입니다."
+    └─ 등록 질환
+          ↓
+Scenario Registry
+          ↓ required_tools
+Camera Frame Buffer ← 상단 카메라
+          ↓ 대표 프레임
+YOLO Detection ───────────────┐
+          ↓                   │
+VLM Inventory Checker         │
+          ↓                   │
+Inventory Manager             │
+          ↓ move_queue        │
+Safety Controller ←───────────┘
+          ↓ SAFE
+Robot Task Router
+          ↓
+물체별 ACT Policy / Trajectory Replay
+          ↓
+이동 후 YOLO + VLM 재확인
+          ↓
+필요한 물품 / 옮긴 물품 / 없는 물품 리포트
+```
 
-- [ ] 가상 케이스 JSON 스키마 확정
-- [ ] 도구·약품·구역 Ontology 확정
-- [ ] 10개 가상 시나리오를 Case–Plan Dataset으로 변환
-- [ ] Procedure–Phase–Step–Action 생성 프롬프트 작성
-- [ ] VLM 출력 JSON Schema 및 validation 구현
-- [ ] `required_instrument`, `target`, `next_action` 파싱 구현
-- [ ] 오류 코드별 피드백 문장 템플릿 작성
-- [ ] 카메라 인식 결과를 VLM 입력 형식으로 변환
-- [ ] 세션 종료 리포트 문장 생성
-- [ ] VLM이 없는 도구나 실제 약물 용량을 생성하지 못하도록 제약 설정
+### 5.1 ROS 2 노드 제안
 
-**주요 산출물**
+| 노드 | 역할 |
+|---|---|
+| `case_input_node` | 환자 ID와 질환명이 포함된 가상 케이스 수신 |
+| `case_validator_node` | 환자 ID 형식과 등록 질환 검증 |
+| `scenario_registry_node` | 질환별 고정 물품 순서 제공 |
+| `camera_buffer_node` | 카메라 프레임을 유지하고 이벤트 시 대표 프레임 제공 |
+| `yolo_detection_node` | 손·물품·미등록 물체 검출과 위치 추적 |
+| `vlm_inventory_node` | 영상과 필요 물품을 비교해 존재·누락 물품 JSON 생성 |
+| `inventory_manager_node` | `move_queue`, `moved_tools`, `missing_tools` 상태 관리 |
+| `safety_controller_node` | 손·이물질·판단 불일치 시 로봇 정지 |
+| `robot_task_router_node` | 물체별 ACT 정책 또는 replay 선택 |
+| `session_report_node` | 최종 결과를 자연어와 JSON으로 출력 |
 
-- `case_dataset.json`
-- `procedure_graph.json`
-- `vlm_prompt.txt`
-- `feedback_rules.json`
-- `vlm_case_planner_node.py`
+### 5.2 주요 토픽
+
+| 토픽 | 데이터 |
+|---|---|
+| `/case/input` | `patient_id`, `case_id`, `disease_name` |
+| `/scenario/required_tools` | 질환별 필요 물품 순서 |
+| `/camera/keyframe` | VLM 검사용 대표 프레임 |
+| `/perception/detections` | YOLO 클래스, bbox, 중심점, 신뢰도 |
+| `/inventory/state` | 필요·존재·누락·이동 완료 물품 |
+| `/robot/move_queue` | 실행할 물품 ID 배열 |
+| `/safety/state` | `READY`, `STOPPED`, `ERROR` |
+| `/session/report` | 필요한 물품·옮긴 물품·없는 물품 |
 
 ---
 
-### 11.2 팀원 2 — 모방학습·LeRobot·데이터셋 담당
+## 6. VLM 모델 후보와 권장 순서
 
-- [ ] OMX-L/OMX-F의 LeRobot 연결 환경 확인
-- [ ] 도구별 task ID 정의
-- [ ] 카메라 프레임, joint state, gripper state 동기화
-- [ ] 도구별 Leader 교시 궤적 5~10회 수집
-- [ ] LeRobot Dataset 형식으로 episode 저장
-- [ ] 데이터 시각화 및 실패 episode 제거
-- [ ] Train/Validation split 구성
-- [ ] trajectory replay 기준선 구현
-- [ ] Behavior Cloning 또는 ACT 정책 학습
-- [ ] 도구별 Pick-and-Place 성공률 평가
-- [ ] 정책 실패 시 replay로 전환하는 fallback 정의
+첨부된 실행 환경은 **NVIDIA GeForce RTX 4060 Laptop GPU, VRAM 8GB**다. ACT 정책과 같은 GPU를 사용할 가능성을 고려해 작은 로컬 모델부터 검증한다.
+
+| 우선순위 | 모델 | 선정 이유 | 주의점 |
+|---:|---|---|---|
+| 1 | [`Qwen/Qwen3-VL-2B-Instruct`](https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct) | 2B 규모, 이미지·영상 이해와 공간 인식 지원, Apache-2.0, 8GB GPU에서 가장 먼저 시험하기 적합 | 양자화 여부와 ACT 동시 실행 시 VRAM을 실제 측정해야 함 |
+| 2 | [`Qwen/Qwen2.5-VL-3B-Instruct`](https://huggingface.co/Qwen/Qwen2.5-VL-3B-Instruct) | 객체 bbox·point localization과 안정적인 JSON 출력이 명시되어 있어 재고 판정 형식에 적합 | Qwen3-VL보다 이전 세대이며 3B라 추론 부하가 조금 큼 |
+| 3 | [`Qwen/Qwen3-VL-4B-Instruct`](https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct) | 2B 모델의 물품 판별 정확도가 부족할 때 사용할 정확도 우선 후보 | 8GB에서 ACT와 동시 상주는 빠듯할 수 있어 4-bit 양자화와 직렬 실행 필요 |
+| 4 | [`openbmb/MiniCPM-V-4`](https://huggingface.co/openbmb/MiniCPM-V-4) | 4.1B 규모의 이미지·다중 이미지·영상 이해 모델로 효율성 대안 | 커스텀 코드 의존성과 출력 JSON 안정성을 별도 검증해야 함 |
+
+### 6.1 최종 추천
+
+1. `Qwen3-VL-2B-Instruct`로 로컬 기준선을 만든다.
+2. 15개 가상 케이스의 정지 이미지 테스트에서 물품 존재·누락 판정 정확도를 측정한다.
+3. JSON 파싱 성공률과 누락 물품 정확도가 부족하면 `Qwen2.5-VL-3B-Instruct`를 비교한다.
+4. 2B·3B 모두 시각 판별이 부족할 때만 `Qwen3-VL-4B-Instruct` 양자화 모델을 시험한다.
+5. 모든 모델은 ACT와 동시에 GPU를 사용하지 않고 먼저 직렬 실행한다. 동시 실행은 VRAM 사용량과 지연을 확인한 뒤 결정한다.
+
+VLM 선택 기준은 일반 벤치마크 점수보다 다음 프로젝트 지표를 우선한다.
+
+- 네 물품별 존재 여부 정확도
+- 없는 물품을 있다고 판단하는 False Positive 비율
+- `required_tools`, `present_required_tools`, `missing_tools` JSON 파싱 성공률
+- 한 번의 인벤토리 추론 지연
+- VLM과 ACT를 번갈아 실행할 때 최대 VRAM 사용량
+
+---
+
+## 7. 가상 케이스 15종
+
+각 케이스에서 사용자 입력은 `patient_id`, `case_id`, `disease_name`만 포함한다. 아래의 `카메라 장면 정답`은 VLM에 텍스트로 제공하는 값이 아니라 테스트를 위해 실제 트레이에 배치할 물품과 기대 결과를 의미한다.
+
+### 7.1 감기 5종
+
+필요 물품 순서: `Syringe → Pill`
+
+| Case ID | Patient ID | 카메라 장면 정답 | 옮길 물품 | 없는 물품 | 테스트 목적 |
+|---|---|---|---|---|---|
+| `COLD_001` | `P1COLD01` | Syringe, Pill | Syringe, Pill | 없음 | 정상 전체 수행 |
+| `COLD_002` | `P2COLD02` | Syringe | Syringe | Pill | 두 번째 물품 누락 |
+| `COLD_003` | `P3COLD03` | Pill | Pill | Syringe | 첫 번째 물품을 건너뛰고 다음 물품 수행 |
+| `COLD_004` | `P4COLD04` | 없음 | 없음 | Syringe, Pill | 필요한 물품 전체 누락 |
+| `COLD_005` | `P5COLD05` | Syringe, Pill, Glasses, XRay | Syringe, Pill | 없음 | 불필요한 물품이 함께 있을 때 선택 정확도 |
+
+### 7.2 폐렴 5종
+
+필요 물품 순서: `XRay → Pill → Syringe`
+
+| Case ID | Patient ID | 카메라 장면 정답 | 옮길 물품 | 없는 물품 | 테스트 목적 |
+|---|---|---|---|---|---|
+| `PNEUMONIA_001` | `P1PNEU01` | XRay, Pill, Syringe | XRay, Pill, Syringe | 없음 | 정상 전체 수행 |
+| `PNEUMONIA_002` | `P2PNEU02` | Pill, Syringe | Pill, Syringe | XRay | 첫 번째 물품 누락 |
+| `PNEUMONIA_003` | `P3PNEU03` | XRay, Syringe | XRay, Syringe | Pill | 중간 물품 누락 |
+| `PNEUMONIA_004` | `P4PNEU04` | XRay, Pill | XRay, Pill | Syringe | 마지막 물품 누락 |
+| `PNEUMONIA_005` | `P5PNEU05` | XRay, Syringe, Glasses | XRay, Syringe | Pill | 누락 물품과 방해 물품 동시 존재 |
+
+### 7.3 골절 5종
+
+필요 물품 순서: `Glasses → XRay → Pill`
+
+| Case ID | Patient ID | 카메라 장면 정답 | 옮길 물품 | 없는 물품 | 테스트 목적 |
+|---|---|---|---|---|---|
+| `FRACTURE_001` | `P1FRAC01` | Glasses, XRay, Pill | Glasses, XRay, Pill | 없음 | 정상 전체 수행 |
+| `FRACTURE_002` | `P2FRAC02` | XRay, Pill | XRay, Pill | Glasses | 첫 번째 물품 누락 |
+| `FRACTURE_003` | `P3FRAC03` | Glasses, Pill | Glasses, Pill | XRay | 중간 물품 누락 |
+| `FRACTURE_004` | `P4FRAC04` | Glasses, XRay | Glasses, XRay | Pill | 마지막 물품 누락 |
+| `FRACTURE_005` | `P5FRAC05` | Glasses, Pill, Syringe | Glasses, Pill | XRay | 누락 물품과 방해 물품 동시 존재 |
+
+---
+
+## 8. 실시간 인벤토리 확인 구현 순서
+
+### 8.1 1단계: 정적 이미지 기준선
+
+1. 네 물품을 단독·혼합·누락 조건으로 촬영한다.
+2. Scenario Registry가 질환별 `required_tools`를 반환한다.
+3. VLM에 이미지 한 장과 `required_tools`를 입력한다.
+4. `present_required_tools`, `missing_tools`, `move_queue` JSON을 생성한다.
+5. 15개 가상 케이스의 정답과 비교한다.
+6. 미등록 질환 입력 시 `등록되지 않은 질환입니다.`가 정확히 출력되는지 확인한다.
+
+### 8.2 2단계: 이벤트 기반 카메라 연결
+
+1. 카메라는 계속 프레임을 수집한다.
+2. YOLO는 실시간으로 물품과 손을 검출한다.
+3. 세션 시작, 물품 변화, 로봇 이동 완료 이벤트가 발생하면 대표 프레임을 선택한다.
+4. VLM은 대표 프레임과 YOLO 검출 목록을 함께 검토한다.
+5. Inventory Manager가 `move_queue`를 확정한다.
+6. 없는 물품은 건너뛰고 존재하는 물품만 로봇 라우터에 전달한다.
+
+### 8.3 3단계: 이동 후 재검증
+
+1. 물품 하나를 보조 트레이로 이동한다.
+2. MainToolTray와 AssistTray의 대표 프레임을 다시 획득한다.
+3. YOLO가 목표 물품의 이동 여부를 확인한다.
+4. VLM이 현재 재고 상태를 다시 요약한다.
+5. 성공한 물품을 `moved_tools`에 추가한다.
+6. 실패하면 다음 물품으로 진행하지 않고 `MOVE_VERIFICATION_FAILED`를 출력한다.
+
+### 8.4 4단계: 최종 리포트
+
+세션 종료 시 다음 세 목록을 반드시 출력한다.
+
+- 필요한 물품: `required_tools`
+- 옮긴 물품: `moved_tools`
+- 없는 물품: `missing_tools`
+
+---
+
+## 9. YOLO 안전정지
+
+로봇과 트레이는 무균 영역으로 가정한다. 큰 트레이 또는 작은 보조 트레이에서 손이나 등록되지 않은 물체가 감지되면 로봇을 정지한다.
+
+### 9.1 검출 대상
+
+```text
+등록 클래스:
+- robot_arm
+- Syringe
+- Glasses
+- Pill
+- XRay
+
+위험 클래스:
+- hand
+
+미등록 물체:
+- 배경 차분 또는 세그멘테이션으로 새 영역을 찾았지만
+  등록 클래스나 robot_arm과 일치하지 않는 물체
+```
+
+### 9.2 정지 규칙
+
+- 손이 `MainToolTray` 또는 `AssistTray` ROI에 진입하면 즉시 정지한다.
+- 미등록 물체가 트레이 ROI에서 연속 프레임 동안 유지되면 정지한다.
+- YOLO와 VLM의 물품 존재 판단이 다르면 로봇 실행을 보류한다.
+- 검출 신뢰도가 기준 미만이면 해당 물품을 집지 않는다.
+- 안전 상태가 정상으로 돌아와도 자동 재개하지 않고 사용자가 확인한 뒤 재개한다.
+
+VLM은 안전정지 여부를 결정하거나 정지를 해제할 권한을 갖지 않는다.
+
+---
+
+## 10. 모방학습 기준선과 YOLO+ACT 확장안
+
+### 10.1 현재 기준선
+
+- `Syringe`, `Glasses`, `Pill`, `XRay`별 30개 에피소드를 수집한다.
+- 카메라 영상, joint position, joint velocity, gripper position, task ID, 성공 여부를 동기화한다.
+- 위치, 회전, 주변 물품 배치를 변화시킨다.
+- 실패한 교시는 기본 학습셋에서 제외하고 오류 분석용으로 보관한다.
+- 먼저 물체별 ACT 정책의 목표 선택·파지·이동·배치 성공률을 각각 10회 이상 평가한다.
+
+### 10.2 확장 전환 조건
+
+30개 학습을 완료한 뒤 다음 중 하나라도 발생하면 YOLO+ACT 결합 구조로 확장한다.
+
+- 목표 물체 근처까지 가지만 파지가 반복적으로 빗나감
+- 시작 위치를 조금 바꾸면 파지 성공률이 크게 하락함
+- 물체의 회전 각도 변화에 취약함
+- 목표 물체와 다른 물체가 가까울 때 잘못 집음
+- 물체별 10회 평가에서 파지 성공률이 사전에 정한 기준에 미달함
+
+이 확장은 30개 학습 전에는 필수 범위로 넣지 않는다. 먼저 현재 ACT 기준선을 평가하고 실패 원인이 확인된 경우에만 진행한다.
+
+### 10.3 확장 구조
+
+```text
+VLM: 이동할 물체 ID 결정
+    ↓
+YOLO: 목표 물체 bbox·중심·방향 검출
+    ↓
+Pixel-to-Robot 좌표 변환
+    ↓
+기준 파지 궤적에 Δx·Δy·Δyaw 보정
+    ↓
+ACT 또는 파지 primitive 실행
+    ↓
+YOLO: 파지 및 이동 성공 재확인
+```
+
+YOLO 검출 예시는 다음과 같다.
+
+```json
+{
+  "class_id": "Syringe",
+  "confidence": 0.94,
+  "bbox": [220, 145, 310, 280],
+  "center_px": [265, 212],
+  "orientation_deg": 18.5
+}
+```
+
+고정 상단 카메라와 평평한 트레이에서는 Homography 또는 카메라-로봇 캘리브레이션을 이용해 중심 픽셀을 로봇 기준 `x`, `y`로 변환한다. 물체 높이는 물체별 고정 `grasp_z`를 사용한다.
+
+기존 ACT 정책을 임의의 중간 상태에서 시작하지 않는다. 다음 순서로 확장한다.
+
+1. 교시 데이터의 기준 물체 위치 `nominal_xy`를 저장한다.
+2. YOLO가 현재 물체 위치 `detected_xy`를 계산한다.
+3. `offset_xy = detected_xy - nominal_xy`를 구한다.
+4. 기존 전체 궤적 또는 접근 waypoint에 위치 오프셋을 적용한다.
+5. 물체 상단 안전 높이에서 한 번 더 위치를 확인한다.
+6. 오차가 허용 범위 안일 때만 하강하고 파지한다.
+7. 들어 올린 뒤 원래 위치에서 물체가 사라졌는지 확인한다.
+
+---
+
+## 11. 3인 기능별 To Do List
+
+### 11.1 팀원 1 — VLM·시나리오·인벤토리 담당
+
+- [ ] 환자 ID와 질환 입력 JSON Schema 확정
+- [ ] 감기·폐렴·골절 Scenario Registry 작성
+- [ ] 15개 가상 케이스를 Case–Plan Dataset으로 변환
+- [ ] 미등록 질환 고정 응답 구현
+- [ ] VLM Inventory Prompt 작성
+- [ ] `required/present/missing/move_queue/moved` JSON 검증 구현
+- [ ] Qwen3-VL 2B → Qwen2.5-VL 3B → Qwen3-VL 4B 순으로 비교
+- [ ] 최종 세션 리포트 생성
+
+**주요 산출물**
+
+- `config/scenario_registry.json`
+- `data/virtual_cases_15.json`
+- `config/vlm_inventory_prompt.txt`
+- `expert_surgical_mentor/vlm_inventory_node.py`
+- `tests/test_case_validator.py`
+- `tests/test_vlm_inventory_schema.py`
+
+### 11.2 팀원 2 — 모방학습·ACT 담당
+
+- [ ] 네 물체별 30개 에피소드 수집 완료
+- [ ] 위치·회전·방해 물품 조건 분포 확인
+- [ ] 물체별 ACT 정책 학습
+- [ ] 목표 선택·파지·이동·배치 성공률 분리 측정
+- [ ] 물체별 10회 이상 평가
+- [ ] 30개 학습 후 파지 실패 패턴 분석
+- [ ] 전환 조건 충족 시 YOLO 위치 오프셋 적용 구조 구현
 
 **주요 산출물**
 
 - `lerobot_dataset/`
-- `trajectory_replay.py`
-- `train_act.sh`
 - `imitation_policy/`
 - `evaluation_results.csv`
+- `tests/test_policy_router.py`
+- 확장 시 `expert_surgical_mentor/grasp_offset_controller.py`
 
----
+### 11.3 팀원 3 — ROS 2·YOLO·로봇 통합 담당
 
-### 11.3 팀원 3 — 로봇제어·ROS 2·카메라 인식·통합 담당
-
-- [ ] OMX-L/OMX-F 포트와 DYNAMIXEL 통신 확인
-- [ ] ROS 2 joint state 및 trajectory command 확인
-- [ ] 상단 카메라 설치와 내부 파라미터 확인
-- [ ] MainToolTray, AssistTray, PracticeZone, ReturnZone 좌표 정의
-- [ ] 도구별 고정 Pick waypoint 설정
-- [ ] AssistTray 배치 waypoint 설정
-- [ ] 로봇 Home pose와 안전 높이 설정
-- [ ] 도구·약품 검출 모델 또는 마커 기반 인식 구현
-- [ ] 수련자 손과 Zone 진입 여부 추적
-- [ ] Step Tracker와 Safety Check 노드 구현
-- [ ] VLM 명령 → 로봇 task 변환 ROS 2 인터페이스 구현
-- [ ] 충돌·작업 범위·비상 정지 테스트
+- [ ] 상단 카메라와 트레이 ROI 고정
+- [ ] 네 물품과 손 YOLO 검출 구현
+- [ ] 미등록 물체 검출 보조 로직 구현
+- [ ] Camera Frame Buffer와 이벤트 트리거 구현
+- [ ] Inventory Manager 상태 전이 구현
+- [ ] Safety Controller와 수동 재개 구현
+- [ ] 물체별 ACT Policy Router 연결
+- [ ] 이동 전·후 검증과 최종 리포트 연결
+- [ ] 확장 시 픽셀-로봇 좌표 변환 캘리브레이션
 
 **주요 산출물**
 
-- `omx_hardware_node.py`
-- `tool_detection_node.py`
-- `step_tracker_node.py`
-- `workspace_config.yaml`
-- `robot_waypoints.yaml`
+- `expert_surgical_mentor/yolo_detection_node.py`
+- `expert_surgical_mentor/inventory_manager_node.py`
+- `expert_surgical_mentor/safety_controller_node.py`
+- `config/workspace_config.yaml`
+- `config/robot_waypoints.yaml`
 - `launch/expert_surgical_mentor.launch.py`
+- `tests/test_inventory_manager.py`
+- `tests/test_safety_controller.py`
 
 ---
 
-### 11.4 세 명 공통 통합 작업
+## 12. 구현 우선순위
 
-- [ ] 정상 케이스 1개 end-to-end 실행
-- [ ] WrongTool 케이스 실행
-- [ ] WrongOrder 또는 WrongMedication 케이스 실행
-- [ ] 입력부터 리포트까지 로그 저장
-- [ ] 데모 실패 시 수동 replay 경로 준비
-- [ ] 발표용 시연 영상 촬영
+### Phase 1 — 입력과 정적 VLM 검증
 
----
+1. 환자 ID·질환 입력 Schema를 확정한다.
+2. 세 질환 Registry와 15개 케이스를 작성한다.
+3. Qwen3-VL 2B를 이용해 정적 이미지 인벤토리 JSON을 생성한다.
+4. 미등록 질환과 JSON Schema 실패 처리를 검증한다.
 
-## 12. 3일 MVP 우선순위
+### Phase 2 — 실시간 인식과 상태 관리
 
-### Day 1 — 환경 및 기준 동작
+1. YOLO 물품·손 검출을 연결한다.
+2. 카메라 대표 프레임 이벤트를 정의한다.
+3. VLM과 YOLO의 결과를 Inventory Manager에서 합친다.
+4. 없는 물품을 건너뛰고 존재하는 물품만 `move_queue`에 넣는다.
 
-- 팀원 1: Case JSON, 시나리오 3개 우선 정의
-- 팀원 2: LeRobot 또는 ROS 2 기반 데이터 수집 확인
-- 팀원 3: 카메라·로봇 연결, waypoint, zone 설정
+### Phase 3 — ACT 연결
 
-### Day 2 — 기능 구현
+1. 물체별 30개 ACT 학습 결과를 평가한다.
+2. VLM의 `move_queue` 순서대로 물체별 정책을 호출한다.
+3. 이동 후 YOLO와 VLM으로 성공 여부를 재확인한다.
+4. 필요한 물품·옮긴 물품·없는 물품 리포트를 출력한다.
 
-- 팀원 1: VLM 계획 및 피드백 JSON 출력
-- 팀원 2: 도구별 episode 수집, replay 및 ACT 학습 시도
-- 팀원 3: 도구 검출, 로봇 전달, Step Tracker 연결
+### Phase 4 — 조건부 YOLO+ACT 확장
 
-### Day 3 — 통합 및 시연
-
-- 필수 시나리오: 도구 교환 또는 가상 봉합 보조
-- 약품 시나리오: 노란색/주황색 약품 선택 오류 데모
-- 최종 리포트, 영상 및 발표 자료 완성
+1. 30개 학습 후 파지 성공률을 검토한다.
+2. 파지 실패가 반복될 때만 카메라-로봇 캘리브레이션을 수행한다.
+3. YOLO 중심·방향을 로봇 좌표로 변환한다.
+4. ACT 궤적 또는 접근 waypoint에 위치 오프셋을 적용한다.
+5. 동일한 평가 조건으로 확장 전후 파지 성공률을 비교한다.
 
 ---
 
@@ -572,16 +533,21 @@ Action = Actor + Instrument/Object + Verb + Target
 
 | 항목 | 최소 성공 기준 |
 |---|---|
-| VLM 계획 | Case 1개 이상에서 올바른 도구 순서 JSON 출력 |
-| 로봇 전달 | 3개 도구 중 2개 이상을 큰 트레이에서 작은 트레이로 이동 |
-| 모방학습 | 1개 도구에 대해 학습 정책 또는 trajectory replay 성공 |
-| 시각 인식 | 주사기, 주황색 집게, 노란색 가위, 두 약품 구분 |
-| 단계 추적 | 정상 순서와 WrongTool 또는 WrongMedication 구분 |
-| 피드백 | 오류 코드에 맞는 다음 행동 안내 출력 |
-| 안전 | 사람 손에 직접 전달하지 않고 작은 보조 트레이에만 배치 |
+| 입력 검증 | 영문·숫자 환자 ID와 세 등록 질환만 허용 |
+| 미등록 질환 | `등록되지 않은 질환입니다.` 정확히 출력 |
+| VLM 인벤토리 | 15개 케이스에서 존재·누락 물품 JSON 생성 |
+| 실행 필터링 | 없는 물품을 건너뛰고 존재하는 필요 물품만 이동 |
+| 로봇 전달 | 네 물품 중 데모 대상 물품을 MainToolTray에서 AssistTray로 이동 |
+| 이동 검증 | 이동 성공 물품을 `moved_tools`에 기록 |
+| 최종 리포트 | 필요한 물품·옮긴 물품·없는 물품을 모두 출력 |
+| 안전 | 손 또는 미등록 물체가 트레이에 진입하면 즉시 정지 |
+| 모방학습 | 물체별 30개 학습 후 파지 성공률을 정량 평가 |
+| 조건부 확장 | 기준 미달 시 YOLO+ACT 위치 보정 전후 결과 비교 |
 
 ---
 
 ## 14. 최종 정의
 
-**ExpertSurgicalMentor**는 실제 수술을 수행하거나 의료 판단을 대신하는 시스템이 아니다. 가상 수술 케이스를 기반으로 도구 사용 순서를 계획하고, OMX-F가 수술 보조자처럼 큰 트레이의 도구와 약품 모형을 작은 보조 트레이로 전달하며, 수련자의 도구 선택과 작업 순서를 추적해 피드백하는 **VLM + 모방학습 기반 Physical AI 교육 프로토타입**이다.
+**ExpertSurgicalMentor**는 감기·폐렴·골절 세 가지 가상 질환 케이스를 입력받아 필요한 물품을 결정하고, VLM과 YOLO를 이용해 트레이에 실제로 존재하는 물품을 확인한 뒤 OMX-F가 존재하는 필요 물품만 보조 트레이로 옮기는 교육용 Physical AI 프로토타입이다.
+
+VLM은 장면의 의미 해석과 재고 요약을 담당하고, YOLO는 실시간 물품·손·이물질 검출을 담당한다. 로봇 안전과 실행 여부는 규칙 기반 Safety Controller가 담당한다. 물체별 30개 모방학습을 우선 평가하며, 파지 정확도가 부족한 경우에만 YOLO 기반 위치 보정을 ACT에 결합하는 확장안을 적용한다.
