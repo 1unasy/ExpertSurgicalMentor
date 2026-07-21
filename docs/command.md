@@ -57,6 +57,69 @@ python3 -c "import json; i=json.load(open('${DATASET_DIR}/meta/info.json')); pri
 episodes: 40 tasks: 4
 ```
 
+### 기존 데이터셋을 보존하고 새 세트 수집
+
+기존 `1unasy/pick_and_place`와 로컬 폴더는 이동하거나 삭제하지 않는다. 새 이름
+`pick_and_place_v2`를 사용하면 Hub 저장소와 로컬 캐시가 완전히 분리된다.
+
+새 데이터셋의 첫 녹화:
+
+```bash
+cd ~/ExpertSurgicalMentor
+
+./scripts/record_object_dataset.sh new pick_and_place_v2 syringe 10
+```
+
+같은 새 데이터셋에 다른 물품을 이어서 녹화:
+
+```bash
+./scripts/record_object_dataset.sh more pick_and_place_v2 glasses 10
+./scripts/record_object_dataset.sh more pick_and_place_v2 pill 10
+./scripts/record_object_dataset.sh more pick_and_place_v2 xray 10
+```
+
+추가 에피소드를 더 수집할 때도 `more`를 사용한다.
+
+```bash
+./scripts/record_object_dataset.sh more pick_and_place_v2 syringe 20
+```
+
+기본 포트는 follower `/dev/ttyACM0`, leader `/dev/ttyACM1`이다. 포트가 달라지면:
+
+```bash
+FOLLOWER_PORT=/dev/omx_follower \
+LEADER_PORT=/dev/omx_leader \
+./scripts/record_object_dataset.sh new pick_and_place_v2 syringe 10
+```
+
+새 로컬 폴더:
+
+```text
+/home/user/.cache/huggingface/lerobot/1unasy/pick_and_place_v2
+```
+
+수집 결과 확인:
+
+```bash
+python3 -c "import json; p='$HOME/.cache/huggingface/lerobot/1unasy/pick_and_place_v2/meta/info.json'; i=json.load(open(p)); print('episodes:', i['total_episodes'], 'tasks:', i['total_tasks'], 'frames:', i['total_frames'])"
+```
+
+Hugging Face에 새 데이터셋으로 업로드:
+
+```bash
+cd ~/ExpertSurgicalMentor
+./scripts/upload_lerobot_dataset.sh pick_and_place_v2
+```
+
+업로드 결과:
+
+```text
+https://huggingface.co/datasets/1unasy/pick_and_place_v2
+```
+
+이 실행 파일은 현재 권장 CLI인 `hf upload-large-folder`를 사용하므로 대용량 업로드가
+중단되어도 다시 같은 명령을 실행해 이어서 처리할 수 있다.
+
 ## 4. 이어 녹화 함수
 
 터미널에 다음 함수를 한 번 등록한다.
@@ -156,10 +219,9 @@ Pick up xray-image: 30
 ## 7. 기존 Hugging Face 저장소 갱신
 
 ```bash
-huggingface-cli upload \
+hf upload-large-folder \
   "${DATASET_ID}" \
   "${DATASET_DIR}" \
-  . \
   --repo-type dataset
 ```
 
@@ -367,6 +429,88 @@ run_object glasses
 run_object pill
 run_object xray
 ```
+
+### Syringe 모델 10회 연속 평가
+
+아래 명령은 학습이 완료된 syringe의 마지막 체크포인트를 사용해 10회 연속 추론한다.
+각 에피소드는 20초이며, 에피소드 사이에 물품과 로봇 시작 자세를 다시 설정할 수 있도록
+30초의 대기 시간을 둔다. `RUN_ID`는 나노초까지 포함해 기존 평가 데이터셋과 이름이
+겹치지 않도록 한다.
+
+```bash
+source ~/venv/il/bin/activate
+export HF_USER=1unasy
+RUN_ID=$(date +%Y%m%d_%H%M%S_%N)
+
+cd ~/ExpertSurgicalMentor/src/lerobot
+
+lerobot-record \
+  --robot.type=omx_follower \
+  --robot.port=/dev/ttyACM0 \
+  --robot.id=omx_follower_arm \
+  --robot.cameras='{
+    front: {type: opencv, index_or_path: 4, width: 640, height: 480, fps: 30, fourcc: MJPG},
+    wrist: {type: opencv, index_or_path: 2, width: 640, height: 480, fps: 30, fourcc: MJPG}
+  }' \
+  --display_data=true \
+  --play_sounds=true \
+  --return_to_start_pose=true \
+  --return_to_start_duration_s=5 \
+  --start_pose_path="$HOME/ExpertSurgicalMentor/config/omx_start_pose.json" \
+  --dataset.repo_id="${HF_USER}/eval_syringe_${RUN_ID}" \
+  --dataset.single_task="Pick up syringe" \
+  --dataset.episode_time_s=20 \
+  --dataset.num_episodes=10 \
+  --dataset.reset_time_s=30 \
+  --dataset.push_to_hub=false \
+  --policy.path="outputs/train/act_syringe/checkpoints/last/pretrained_model"
+```
+
+실행하면 follower가 5초 동안 `config/omx_start_pose.json`의 기준 자세로 먼저 이동한다.
+각 20초 추론이 끝나면 5초 동안 동일한 자세로 부드럽게 복귀하고, 음성으로 reset 구간을 알린 뒤 30초 동안 화면을
+표시하면서 기다린다. 이때 syringe와 주변 물품 위치를 바꾸고 로봇 동작 범위 밖으로
+이동한다. 재설정 시간이 부족하면 `--dataset.reset_time_s=60`으로 늘린다.
+
+기준 자세는 syringe 학습 데이터 30개 에피소드의 첫 프레임 관절값 중앙값으로 설정했다.
+자동 이동 경로에 물품이나 사람이 있으면 충돌할 수 있으므로 시작 및 복귀 동작 중 작업 공간을 비워 둔다.
+`Esc`로 비상 종료한 경우에는 자동 복귀하지 않는다.
+
+동일한 명령을 물품 이름만 바꿔 실행할 수 있도록 실행 파일도 제공한다. 기본값은 VLM
+라우터가 한 물품씩 호출하기 적합한 1회 실행이다.
+
+```bash
+cd ~/ExpertSurgicalMentor
+
+./scripts/run_act_object.sh syringe
+./scripts/run_act_object.sh glasses
+./scripts/run_act_object.sh pill
+./scripts/run_act_object.sh xray
+```
+
+수동으로 동일 물품을 10회 평가할 때는 다음처럼 실행한다.
+
+```bash
+./scripts/run_act_object.sh syringe --episodes 10
+```
+
+실행 파일은 기본적으로 `--policy.n_action_steps=20`을 적용해 약 0.67초마다 카메라를
+다시 보고 행동을 생성한다. 기존 기본값 100과 비교하거나 동작이 끊기는 경우에는 다음처럼
+변경할 수 있다.
+
+```bash
+./scripts/run_act_object.sh syringe --action-steps 30
+./scripts/run_act_object.sh syringe --action-steps 100
+```
+
+follower 포트가 udev 링크로 설정되어 있으면 환경 변수로 변경할 수 있다.
+
+```bash
+ROBOT_PORT=/dev/omx_follower ./scripts/run_act_object.sh syringe
+```
+
+VLM 연동 시에는 VLM 출력값을 그대로 셸 명령으로 실행하지 않고, `syringe`, `glasses`,
+`pill`, `xray` 중 하나인지 검증한 뒤 이 실행 파일의 첫 번째 인자로 전달한다. 실행 파일도
+동일한 허용 목록을 검사하며 선택된 물품에 맞는 ACT 모델과 task 문자열만 불러온다.
 
 여러 물체를 순차 실행:
 
