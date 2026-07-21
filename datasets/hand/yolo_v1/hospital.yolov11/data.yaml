@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 1
+names: ['hospital']
+
+roboflow:
+  workspace: soojins-workspace
+  project: hospital-ej7i1
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/soojins-workspace/hospital-ej7i1/dataset/1
