@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 #
-# Train YOLO11s for hand-safety detection.
+# Train YOLO11n for hand-safety detection.
 #
 # Dataset:  datasets/hand/yolo_v1/hospital.yolov11/  (Roboflow export)
 # Output:   outputs/train/${RUN_NAME}/weights/best.pt
 #
 # Env vars (all optional):
-#   MODEL      base checkpoint (default: yolo11s.pt; ultralytics auto-downloads)
+#   MODEL      base checkpoint (default: yolo11n.pt; ultralytics auto-downloads)
 #   EPOCHS     training epochs (default: 100)
 #   BATCH      batch size (default: 16; try 8 on Mac MPS if OOM)
 #   IMGSZ      input image size (default: 640, matches Roboflow export)
 #   PATIENCE   early-stop patience in epochs (default: 20)
 #   DEVICE     0 for CUDA, "mps" for Apple Silicon, "cpu", or unset = auto
-#   RUN_NAME   run subdirectory (default: hand_yolo_s_sweep_stable_v1)
+#   RUN_NAME   run subdirectory (default: hand_yolo_n_sweep_stable_v1)
 #   OUTPUT_ROOT project root under which runs are saved (default: outputs/train)
 
 set -Eeuo pipefail
@@ -20,13 +20,13 @@ set -Eeuo pipefail
 PROJECT_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$PROJECT_ROOT"
 
-MODEL="${MODEL:-yolo11s.pt}"
+MODEL="${MODEL:-yolo11n.pt}"
 EPOCHS="${EPOCHS:-100}"
 BATCH="${BATCH:-16}"
 IMGSZ="${IMGSZ:-640}"
 PATIENCE="${PATIENCE:-20}"
 DEVICE="${DEVICE:-}"
-RUN_NAME="${RUN_NAME:-hand_yolo_s_sweep_stable_v1}"
+RUN_NAME="${RUN_NAME:-hand_yolo_n_sweep_stable_v1}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-outputs/train}"
 
 if [[ "$OUTPUT_ROOT" != /* ]]; then

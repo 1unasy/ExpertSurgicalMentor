@@ -28,16 +28,17 @@ MODEL_PREFIX=act_v2_full100k \
 
 ## 2. Hand YOLO: 학습·안전 추론
 
-기본 모델은 비교 실험에서 선택한 YOLO11s다.
+배포 모델은 ACT와 동시에 실행할 때의 지연과 GPU 사용량을 고려해 YOLO11n을 사용한다.
 
 ```bash
-DEVICE=0 BATCH=8 ./src/scripts/hand_yolo/train_hand_yolo.sh
+MODEL=yolo11n.pt RUN_NAME=hand_yolo_n_sweep_stable_v1 \
+  DEVICE=0 BATCH=8 ./src/scripts/hand_yolo/train_hand_yolo.sh
 ```
 
 최종 가중치:
 
 ```text
-outputs/train/hand_yolo_s_sweep_stable_v1/weights/best.pt
+outputs/train/hand_yolo_n_sweep_stable_v1/weights/best.pt
 ```
 
 손 추론은 `run_act_object.sh` 내부에서 실행된다. 손 검출 시 현재 관절 위치를 유지하고,
@@ -113,7 +114,7 @@ python ./src/scripts/pipeline/run_cold_scenario_web.py
 1. 가상 환자 식별자와 질환 입력
 2. `감기 → syringe` 허용 목록 매핑
 3. Object YOLO로 Main Tray에서 주사기 연속 5프레임 확인
-4. 손 안전 YOLO11s를 활성화한 ACT 50,000-step 정책 실행
+4. 손 안전 YOLO11n을 활성화한 ACT 50,000-step 정책 실행
 5. 초기 자세 복귀
 6. Object YOLO로 Assist Tray에서 주사기 연속 5프레임 확인
 7. 성공 시 자동 종료; Main Tray에 남으면 제한 횟수 재시도

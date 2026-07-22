@@ -12,7 +12,7 @@
 | Train / Val      | 120 / 30 (8:2 stratified)                                                       |
 | 클래스           | `hand` (단일)                                                                   |
 | 검출 대상 카메라 | **front 카메라 단독** — 조기 검출에 유리, wrist는 사각지대·그리퍼 방해로 부적합 |
-| 선정 모델        | YOLO11s (`hand_yolo_s_sweep_stable_v1/weights/best.pt`)                         |
+| 배포 모델        | YOLO11n (`hand_yolo_n_sweep_stable_v1/weights/best.pt`)                         |
 | 학습 스크립트    | `src/scripts/hand_yolo/train_hand_yolo.sh`                                                    |
 | 수집 도구        | `src/scripts/hand_yolo/collect_hand_images.py`                                                |
 
@@ -139,12 +139,12 @@ pip install ultralytics
 DEVICE=0 bash ./src/scripts/hand_yolo/train_hand_yolo.sh          # CUDA
 ```
 
-환경 변수: `MODEL` (기본 `yolo11s.pt`), `EPOCHS` (100), `BATCH` (16), `IMGSZ` (640), `PATIENCE` (20), `RUN_NAME` (`hand_yolo_s_sweep_stable_v1`)
+Nano 재학습 시 `MODEL=yolo11n.pt`, `RUN_NAME=hand_yolo_n_sweep_stable_v1`을 지정한다. 그 외 주요 환경 변수는 `EPOCHS` (100), `BATCH` (16), `IMGSZ` (640), `PATIENCE` (20)이다.
 
 ### 결과물
 
 ```
-outputs/train/hand_yolo_s_sweep_stable_v1/
+outputs/train/hand_yolo_n_sweep_stable_v1/
 ├── weights/best.pt          # 실사용 모델
 ├── results.png              # 학습 곡선
 ├── confusion_matrix.png

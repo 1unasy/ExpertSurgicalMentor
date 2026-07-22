@@ -38,7 +38,7 @@
 → 성공 / 제한적 재시도 / 안전 중단</pre></div>
   <table><thead><tr><th>단계</th><th>기술</th><th>역할</th><th>최종 산출물</th></tr></thead><tbody>
     <tr><td>모방학습</td><td>ACT</td><td>pick-and-place 동작</td><td>50,000-step checkpoint</td></tr>
-    <tr><td>손 안전</td><td>YOLO11s</td><td>손 검출·일시정지</td><td>hand_yolo_s_sweep_stable_v1/best.pt</td></tr>
+    <tr><td>손 안전</td><td>YOLO11n</td><td>손 검출·일시정지</td><td>hand_yolo_n_sweep_stable_v1/best.pt</td></tr>
     <tr><td>장비 확인</td><td>YOLO11s</td><td>pill/syringe 위치 확인</td><td>object_yolo_v1/best.pt</td></tr>
     <tr><td>트레이</td><td>Polygon ROI</td><td>Main/Assist 포함 판정</td><td>object_tray_rois.json</td></tr>
     <tr><td>UI</td><td>Flask</td><td>입력·모니터링·긴급 정지</td><td>run_cold_scenario_web.py</td></tr>
@@ -76,21 +76,22 @@ nvidia-smi</code></pre>
     <div class="tile"><strong>핵심 설계</strong><br>로봇팔·그리퍼 negative N3로 자기 로봇 오탐 억제</div>
   </div>
   <h3>학습</h3>
-  <pre><code>DEVICE=0 BATCH=8 ./src/scripts/hand_yolo/train_hand_yolo.sh</code></pre>
+  <pre><code>MODEL=yolo11n.pt RUN_NAME=hand_yolo_n_sweep_stable_v1 \
+  DEVICE=0 BATCH=8 ./src/scripts/hand_yolo/train_hand_yolo.sh</code></pre>
   <table><thead><tr><th>Base</th><th>Image</th><th>Batch</th><th>Epoch</th><th>Patience</th><th>Optimizer</th></tr></thead><tbody>
-    <tr><td>YOLO11s</td><td>640</td><td>8</td><td>100</td><td>20</td><td>AdamW</td></tr>
+    <tr><td>YOLO11n</td><td>640</td><td>8</td><td>100</td><td>20</td><td>AdamW</td></tr>
   </tbody></table>
   <h3>YOLO11 n/s/m 비교</h3>
   <table><thead><tr><th>모델</th><th>Best epoch</th><th>Precision</th><th>Recall</th><th>mAP50</th><th>mAP50-95</th></tr></thead><tbody>
-    <tr><td>YOLO11n</td><td>35</td><td>1.0000</td><td>0.9984</td><td>0.9950</td><td>0.7445</td></tr>
-    <tr><td><strong>YOLO11s</strong></td><td><strong>49</strong></td><td>0.9448</td><td><strong>1.0000</strong></td><td>0.9892</td><td><strong>0.7799</strong></td></tr>
+    <tr><td><strong>YOLO11n</strong></td><td><strong>35</strong></td><td><strong>1.0000</strong></td><td><strong>0.9984</strong></td><td><strong>0.9950</strong></td><td><strong>0.7445</strong></td></tr>
+    <tr><td>YOLO11s</td><td>49</td><td>0.9448</td><td>1.0000</td><td>0.9892</td><td>0.7799</td></tr>
     <tr><td>YOLO11m</td><td>23</td><td>0.8305</td><td>0.8889</td><td>0.9350</td><td>0.6733</td></tr>
   </tbody></table>
-  <p><span class="good">선정: YOLO11s</span> — recall 1.0, 세 모델 중 가장 높은 mAP50-95.</p>
-  <pre><code>outputs/train/hand_yolo_s_sweep_stable_v1/weights/best.pt</code></pre>
+  <p><span class="good">배포 선정: YOLO11n</span> — 약 5.3MB이며 Precision 1.0, Recall 0.9984, mAP50 0.995를 유지해 ACT 동시 실행의 지연과 GPU 부담을 낮춘다. YOLO11s의 mAP50-95가 더 높지만 통합 실시간성을 우선했다.</p>
+  <pre><code>outputs/train/hand_yolo_n_sweep_stable_v1/weights/best.pt</code></pre>
   <h3>단독 실시간 확인</h3>
   <pre><code>yolo detect predict \
-  model=outputs/train/hand_yolo_s_sweep_stable_v1/weights/best.pt \
+  model=outputs/train/hand_yolo_n_sweep_stable_v1/weights/best.pt \
   source=4 imgsz=640 conf=0.15 device=0 show=true save=false</code></pre>
   <p>통합 시 손 검출로 로봇을 hold하고, 손이 10초 연속 사라지면 현재 영상에서 ACT를 재계획한다.</p>
 </section>

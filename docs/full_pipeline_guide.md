@@ -12,7 +12,7 @@
 | 단계 | 기술 | 역할 | 최종 모델/파일 |
 |---|---|---|---|
 | 모방학습 | ACT | 물체별 pick-and-place 동작 생성 | `act_v2_full100k_{object}/checkpoints/050000` |
-| 손 안전 | YOLO11s | 작업 영역에 손이 들어오면 로봇 일시정지 | `hand_yolo_s_sweep_stable_v1/weights/best.pt` |
+| 손 안전 | YOLO11n | 작업 영역에 손이 들어오면 로봇 일시정지 | `hand_yolo_n_sweep_stable_v1/weights/best.pt` |
 | 장비 확인 | YOLO11s | syringe/pill 검출 및 트레이 위치 확인 | `object_yolo_v1/weights/best.pt` |
 | 위치 판정 | Polygon ROI | Main/Assist Tray 내부 여부 판정 | `config/object_tray_rois.json` |
 | 통합 실행 | Bash + Flask | 입력, 사전검사, ACT, 사후검사, 재시도 | `src/scripts/pipeline/` |
@@ -132,12 +132,13 @@ python ./src/scripts/hand_yolo/collect_hand_images.py --cam 4 --out datasets/han
 ### 4.3 학습 방법
 
 ```bash
-DEVICE=0 BATCH=8 ./src/scripts/hand_yolo/train_hand_yolo.sh
+MODEL=yolo11n.pt RUN_NAME=hand_yolo_n_sweep_stable_v1 \
+  DEVICE=0 BATCH=8 ./src/scripts/hand_yolo/train_hand_yolo.sh
 ```
 
 | 항목 | 설정 |
 |---|---|
-| Base model | `yolo11s.pt` |
+| Base model | `yolo11n.pt` |
 | Image size | 640 |
 | Batch | 8 |
 | Max epochs | 100 |
@@ -153,15 +154,16 @@ DEVICE=0 BATCH=8 ./src/scripts/hand_yolo/train_hand_yolo.sh
 
 | 모델 | Best epoch | Precision | Recall | mAP50 | mAP50-95 |
 |---|---:|---:|---:|---:|---:|
-| YOLO11n | 35 | 1.0000 | 0.9984 | 0.9950 | 0.7445 |
-| **YOLO11s** | **49** | **0.9448** | **1.0000** | **0.9892** | **0.7799** |
+| **YOLO11n** | **35** | **1.0000** | **0.9984** | **0.9950** | **0.7445** |
+| YOLO11s | 49 | 0.9448 | 1.0000 | 0.9892 | 0.7799 |
 | YOLO11m | 23 | 0.8305 | 0.8889 | 0.9350 | 0.6733 |
 
-선정 모델은 YOLO11s다. 세 모델 중 mAP50-95가 가장 높고 안전 감지에서 중요한 recall이
-1.0이기 때문이다. YOLO11m은 모델 크기가 증가했지만 작은 데이터셋에서 성능이 낮았다.
+YOLO11s가 mAP50-95는 가장 높지만 최종 배포는 YOLO11n을 사용한다. Nano는 약 5.3MB이며
+Precision 1.0, Recall 0.9984, mAP50 0.995를 유지하면서 ACT와 동시에 실행할 때 GPU·지연
+부담이 더 낮다. 즉 정확도 단일 지표보다 실시간 통합 안정성을 우선한 선택이다.
 
 ```text
-outputs/train/hand_yolo_s_sweep_stable_v1/weights/best.pt
+outputs/train/hand_yolo_n_sweep_stable_v1/weights/best.pt
 ```
 
 Validation이 30장으로 작으므로 위 수치를 실제 안전 보증으로 해석하면 안 된다. 장갑, 조명,
@@ -171,7 +173,7 @@ Validation이 30장으로 작으므로 위 수치를 실제 안전 보증으로 
 
 ```bash
 yolo detect predict \
-  model=outputs/train/hand_yolo_s_sweep_stable_v1/weights/best.pt \
+  model=outputs/train/hand_yolo_n_sweep_stable_v1/weights/best.pt \
   source=4 imgsz=640 conf=0.15 device=0 show=true save=false
 ```
 

@@ -21,6 +21,8 @@ runs/
 datasets/hand/raw/
 datasets/objects/
 
+backup/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

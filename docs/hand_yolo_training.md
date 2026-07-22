@@ -26,12 +26,13 @@ negative는 그리퍼를 손으로 잘못 인식해 로봇이 스스로 정지�
 ```bash
 source ~/venv/il/bin/activate
 cd ~/ExpertSurgicalMentor
-DEVICE=0 BATCH=8 ./src/scripts/hand_yolo/train_hand_yolo.sh
+MODEL=yolo11n.pt RUN_NAME=hand_yolo_n_sweep_stable_v1 \
+  DEVICE=0 BATCH=8 ./src/scripts/hand_yolo/train_hand_yolo.sh
 ```
 
 | 설정 | 값 |
 |---|---|
-| Base model | `yolo11s.pt` |
+| Base model | `yolo11n.pt` |
 | Image size | 640 |
 | Batch | 8 |
 | Max epochs | 100 |
@@ -46,36 +47,36 @@ DEVICE=0 BATCH=8 ./src/scripts/hand_yolo/train_hand_yolo.sh
 
 | 모델 | Best epoch | Precision | Recall | mAP50 | mAP50-95 |
 |---|---:|---:|---:|---:|---:|
-| YOLO11n | 35 | 1.0000 | 0.9984 | 0.9950 | 0.7445 |
-| **YOLO11s** | **49** | **0.9448** | **1.0000** | **0.9892** | **0.7799** |
+| **YOLO11n** | **35** | **1.0000** | **0.9984** | **0.9950** | **0.7445** |
+| YOLO11s | 49 | 0.9448 | 1.0000 | 0.9892 | 0.7799 |
 | YOLO11m | 23 | 0.8305 | 0.8889 | 0.9350 | 0.6733 |
 
-YOLO11s를 선정한 이유:
+YOLO11n을 배포 모델로 선정한 이유:
 
-- 안전 감지에서 중요한 validation recall 1.0
-- 세 모델 중 가장 높은 mAP50-95
-- YOLO11m보다 계산량이 작으면서 더 높은 성능
+- 약 5.3MB로 YOLO11s보다 작아 ACT와 동시에 실행할 때 GPU·지연 부담이 낮음
+- validation Precision 1.0, Recall 0.9984, mAP50 0.995로 손 존재 판정 성능이 충분히 높음
+- YOLO11s의 mAP50-95가 더 높다는 정확도 이득보다 실시간 통합 안정성을 우선함
 
 ## 5. 선정 모델
 
 ```text
-outputs/train/hand_yolo_s_sweep_stable_v1/weights/best.pt
+outputs/train/hand_yolo_n_sweep_stable_v1/weights/best.pt
 ```
 
 관련 결과:
 
 ```text
-outputs/train/hand_yolo_s_sweep_stable_v1/results.csv
-outputs/train/hand_yolo_s_sweep_stable_v1/results.png
-outputs/train/hand_yolo_s_sweep_stable_v1/confusion_matrix.png
-outputs/train/hand_yolo_s_sweep_stable_v1/val_batch0_pred.jpg
+outputs/train/hand_yolo_n_sweep_stable_v1/results.csv
+outputs/train/hand_yolo_n_sweep_stable_v1/results.png
+outputs/train/hand_yolo_n_sweep_stable_v1/confusion_matrix.png
+outputs/train/hand_yolo_n_sweep_stable_v1/val_batch0_pred.jpg
 ```
 
 ## 6. 단독 실시간 추론
 
 ```bash
 yolo detect predict \
-  model=outputs/train/hand_yolo_s_sweep_stable_v1/weights/best.pt \
+  model=outputs/train/hand_yolo_n_sweep_stable_v1/weights/best.pt \
   source=4 imgsz=640 conf=0.15 device=0 show=true save=false
 ```
 
