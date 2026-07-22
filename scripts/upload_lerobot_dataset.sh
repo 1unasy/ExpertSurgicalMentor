@@ -15,7 +15,6 @@ if ! [[ "$DATASET_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
   echo "ERROR: Invalid DATASET_NAME: $DATASET_NAME" >&2
   exit 2
 fi
-fi
 
 DATASET_ID="${HF_USER}/${DATASET_NAME}"
 DATASET_DIR="$HOME/.cache/huggingface/lerobot/${DATASET_ID}"

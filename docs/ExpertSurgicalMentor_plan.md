@@ -1,5 +1,16 @@
 # ExpertSurgicalMentor 기획안 초안
 
+> **참고 (2026-07 갱신)**: 이 문서는 프로젝트 초기 기획안이며, 실제 구현 스코프는 이후 축소되어 지금은 **ScrubBot** (스크럽 간호사 도구 전달 로봇 + 손 안전 게이트) MVP로 진행 중이다. 아래 항목은 현재 코드에 반영되지 않았거나 방향이 바뀌었다:
+>
+> - VLM Case Planner / Procedure→Phase→Step→Action 그래프, `procedure_graph.json`, Case–Plan Dataset — **미구현**
+> - Trainee 수행 추적(Step Tracker, PracticeZone, ReturnZone), Feedback Generator, WrongTool/WrongOrder 오류 코드 — **미구현**
+> - 상단(overhead) 단일 카메라 → 실제는 front + wrist 듀얼 카메라
+> - ROS 2 노드 계층 → 실제는 LeRobot CLI 직접 실행
+> - 도구 리스트(OrangeForceps, YellowScissors 등) → 실제는 syringe · pill · glasses · xray (그중 syringe·pill만 데이터 수집·학습 완료)
+> - "3일 MVP" 프레이밍은 stale
+>
+> 현재 실제 구현 상태는 [`../README.md`](../README.md)와 [`command.md`](command.md)를 참고.
+
 ## 1. 프로젝트 주제
 
 **프로젝트명:** 숙련 수술 멘토 (**ExpertSurgicalMentor**)

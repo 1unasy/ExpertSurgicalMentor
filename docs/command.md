@@ -151,9 +151,9 @@ record_more() {
     --display_data=true \
     --dataset.repo_id="${DATASET_ID}" \
     --dataset.single_task="${TASK}" \
-    --dataset.episode_time_s=20 \
+    --dataset.episode_time_s=13 \
     --dataset.num_episodes="${COUNT}" \
-    --dataset.reset_time_s=10 \
+    --dataset.reset_time_s=8 \
     --dataset.push_to_hub=false \
     --resume=true
 }

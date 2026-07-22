@@ -82,7 +82,7 @@ Early Stopping은 오류가 아니다. validation 성능이 더 이상 개선되
 | Precision | 0.900 |
 | Recall | 0.995 |
 | mAP50 | 0.975 |
-| mAP50-95 | 0.770 |
+| mAP50-95 | 0.758 |
 | 추론 시간 | 약 1.6 ms/image |
 
 Validation 데이터가 30장, 손 박스가 18개뿐이므로 이 수치를 실제 안전 성능으로 바로
@@ -226,6 +226,9 @@ datasets/hand/yolo_v1/hospital.yolov11
 별도 test split은 없으므로 아래 결과는 30장 validation 기준이다. 실제 안전 성능을
 확정하려면 카메라·조명·손 방향·장갑 조건을 바꾼 현장 평가가 추가로 필요하다.
 
+배포 모델(§3)은 batch 16으로 학습했지만, 이번 스윕은 세 크기(n/s/m)를 동일 조건으로
+비교하기 위해 YOLO11m이 8 GB VRAM에 들어가는 값인 **batch 8**로 통일했다.
+
 ```text
 GPU: NVIDIA GeForce RTX 4060 Laptop GPU (8GB)
 PyTorch: 2.10.0+cu128
@@ -286,29 +289,46 @@ Ultralytics `results.csv`에 기록된 epoch 번호다.
 outputs/train/sweep_stable_v1_summary.csv
 ```
 
-손 미탐을 줄이는 것이 우선인 안전 감지 용도에는 recall 1.0과 가장 높은 mAP50-95를
-기록한 **YOLO11s를 기본 후보**로 선택한다. 제어 주기 저하나 실시간 지연이 확인되면
-크기가 작고 성능 차이가 제한적인 YOLO11n을 대안으로 사용한다. YOLO11m은 더 크고
-느리면서 이번 validation 성능도 낮아 현재 환경에서는 채택하지 않는다.
+이 파이프라인의 안전 감지 요구에는 **YOLO11n을 유지·권장한다**. Recall(11n 0.9984 vs
+11s 1.0000)이 val 손 박스 18개 기준 0.16% 차이로 사실상 동률인 상황에서 11n이 다음 우위를
+갖는다.
+
+- **Precision 1.0000** (11s 0.9448) — 30 FPS 라이브 추론에서 11s는 초당 약 1회꼴 오탐이
+  발생해 Safety Gate가 헛정지·재개를 반복하게 된다. 11n은 val에서 오탐이 없어 로봇 동작이
+  안정적이다.
+- **mAP50 0.9950** (11s 0.9892) — 판정 임계값 근방에서도 11n이 더 안정.
+- **크기 5.22 MB, 추론 ≈1.6 ms/img** — 3.5× 작고 훨씬 빠르다. Safety 루프 지연을 최소화.
+
+mAP50-95는 11s가 우위(0.7799 vs 0.7445)지만 손이 "있냐 없냐" 판정만 필요한 이 용도에서는
+tight bbox의 실용적 가치가 낮다. 안전 시스템 관점에서 recall이 사실상 같다면 다음 기준은
+precision(헛정지 최소화)과 지연(속도)이며 두 축에서 11n이 우위다.
+
+11m은 Precision·Recall·mAP50 세 지표 모두 밀리고 크기·연산량만 커져 채택하지 않는다.
+
+**재검토 트리거**: 현장 테스트에서 특정 조명·손 방향·장갑 조건 아래 11n의 recall 하락이
+관측되면 11s 재평가를 고려한다. val 18박스로는 미묘한 격차의 통계적 유의성이 낮으므로
+최종 판단은 실제 운영 환경 테스트에 기반한다.
 
 ### 9.5 파이프라인에서 모델 선택
 
-YOLO11s를 사용한 감기 시나리오 설정 검사:
+기본은 YOLO11n. `run_cold_scenario.sh`와 `run_act_object.sh`는 별도 지정이 없으면
+배포용 `outputs/train/hand_yolo_v1/weights/best.pt`(11n, 배치 16 단일 학습본)를 사용한다.
+스윕에서 튜닝한 11n 체크포인트로 바꿔서 감기 시나리오 설정을 검사:
 
 ```bash
 source ~/venv/il/bin/activate
 cd ~/ExpertSurgicalMentor
 
-SAFETY_YOLO_MODEL="$PWD/outputs/train/hand_yolo_s_sweep_stable_v1/weights/best.pt" \
+SAFETY_YOLO_MODEL="$PWD/outputs/train/hand_yolo_n_sweep_stable_v1/weights/best.pt" \
 ./scripts/run_cold_scenario.sh 감기 --dry-run
 ```
 
 실제 전체 파이프라인 실행:
 
 ```bash
-SAFETY_YOLO_MODEL="$PWD/outputs/train/hand_yolo_s_sweep_stable_v1/weights/best.pt" \
+SAFETY_YOLO_MODEL="$PWD/outputs/train/hand_yolo_n_sweep_stable_v1/weights/best.pt" \
 ./scripts/run_cold_scenario.sh 감기
 ```
 
-모델 비교 시에는 위 경로에서 `s`만 `n` 또는 `m`으로 바꾼다. ACT 모델과 Object YOLO는
+모델 비교 시에는 위 경로에서 `n`을 `s` 또는 `m`으로 바꾼다. ACT 모델과 Object YOLO는
 동일하게 유지되므로 손 감지 모델의 오탐, 미탐, 중단·재개 지연을 비교할 수 있다.
