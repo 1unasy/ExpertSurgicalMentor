@@ -89,13 +89,13 @@ Validation 데이터가 30장, 손 박스가 18개뿐이므로 이 수치를 실
 간주하면 안 된다. 카메라 위치, 조명, 손 방향, 가림, 장갑 조건을 바꾼 별도 현장 평가가
 필요하다.
 
-학습 결과:
+학습 결과 (스크립트 기본 RUN_NAME 기준, 필요 시 `RUN_NAME` 환경변수로 변경):
 
 ```text
-outputs/train/hand_yolo_v1
+outputs/train/hand_yolo_n_sweep_stable_v1/
 ```
 
-배포 가중치:
+배포 가중치 (저장소 커밋 대상):
 
 ```text
 models/hand_yolo/best.pt

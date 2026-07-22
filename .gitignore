@@ -245,5 +245,10 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Local training and evaluation datasets
-/datasets/
+# Local training and evaluation datasets: ignore everything under datasets/
+# by default, then allow the labeled Roboflow exports under datasets/hand/yolo_v*/
+# (these are committed so the robot PC can pull them for training).
+/datasets/*
+!/datasets/hand/
+/datasets/hand/*
+!/datasets/hand/yolo_v*/

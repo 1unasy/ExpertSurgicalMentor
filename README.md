@@ -56,7 +56,7 @@ ScrubBot은 이 반복적인 pick-and-place 작업을 로봇 + 모방학습으�
 | Recall         | 0.995                                        |
 | 학습 epoch     | 86 (patience 20, 조기 종료; best epoch 66)   |
 | 배포 모델 크기 | ≈5.2 MB                                      |
-| 배포 파일      | `outputs/train/hand_yolo_v1/weights/best.pt` |
+| 배포 파일      | `models/hand_yolo/best.pt`                   |
 
 **ACT 정책 (물체별, syringe·pill)**
 
@@ -84,32 +84,25 @@ ExpertSurgicalMentor/
 │       ├── raw/                        # 원본 캡처 (git ignored, 재생성 가능)
 │       └── yolo_v1/hospital.yolov11/   # Roboflow 라벨링 export (train/valid)
 ├── docs/
-│   ├── command.md                      # 데이터 수집·학습·평가 전체 워크플로 런북
+│   ├── command.md                      # 최종 데모 명령 요약 (5단계)
+│   ├── full_pipeline_guide.md          # 데이터 수집·학습·평가 전체 워크플로 런북
 │   ├── hand_safety_dataset.md          # 손 감지 데이터셋 문서
-│   ├── hand_yolo_training.md           # YOLO 학습 결과 보고서
+│   ├── hand_yolo_training.md           # 손 감지 YOLO 학습 결과 보고서
+│   ├── object_yolo_training.md         # 물체 감지 YOLO 학습 결과 보고서
+│   ├── tray_roi_presentation.md        # 트레이 ROI 캘리브레이션 원리
 │   └── diagrams/                       # Excalidraw 파이프라인 · 시나리오 다이어그램 + 썸네일
-├── outputs/
-│   └── train/
-│       ├── hand_yolo_v1/               # 배포용 손 감지 YOLO (weights/best.pt 등)
-│       └── object_yolo_v1/             # 배포용 물체 감지 YOLO (weights/best.pt 등)
-├── scripts/
-│   ├── collect_hand_images.py          # 손 감지용 이미지 대화형 수집 도구
-│   ├── train_hand_yolo.sh              # YOLOv11 손 감지 학습
-│   ├── train_hand_yolo_sweep.sh        # n/s/m 크기 비교 스윕 + 요약표 자동 생성
-│   ├── extract_object_yolo_frames.py   # LeRobot 에피소드에서 물체 YOLO 학습 프레임 추출
-│   ├── prepare_object_yolo_dataset.py  # 추출 프레임 → YOLO 데이터셋 폴더 구조로 정리
-│   ├── train_object_yolo.sh            # 물체 감지 YOLO 학습 (syringe · pill 등)
-│   ├── object_yolo_verifier.py         # 물체 감지 결과를 트레이 ROI와 대조 검증
-│   ├── calibrate_tray_rois.py          # Main / Assist 트레이 ROI 캘리브레이션 도구
-│   ├── record_object_dataset.sh        # OMX-Leader 교시 데이터 수집 (LeRobot)
-│   ├── train_act_objects.sh            # 물체별 ACT 정책 학습 (기본 100K step)
-│   ├── upload_lerobot_dataset.sh       # HuggingFace Hub 업로드
-│   ├── run_act_object.sh               # 실시간 ACT 추론 + 손 감지 안전 정지
-│   ├── run_verified_act_object.sh      # 실행 전후 물체 YOLO 검증 + 실패 시 재시도
-│   └── run_cold_scenario.sh            # 감기 시나리오 end-to-end 데모 (질병 → pill)
+├── models/                             # 배포용 가중치 (git tracked)
+│   ├── hand_yolo/best.pt               # 손 감지 (YOLO11n)
+│   └── object_yolo/best.pt             # 물체 감지 (YOLO11s, syringe · pill)
 ├── src/
 │   ├── omx_f_keyboard_teleop.py        # OMX-Follower 키보드 원격 제어
-│   └── lerobot/                        # LeRobot 프레임워크 (별도 clone 필요)
+│   ├── lerobot/                        # LeRobot 프레임워크 (별도 clone 필요)
+│   └── scripts/
+│       ├── hand_yolo/                  # 손 감지 이미지 수집·YOLO 학습·스윕
+│       ├── object_yolo/                # 물체 YOLO 프레임 추출·데이터셋 정리·학습·검증
+│       ├── imitation_learning/         # LeRobot 데이터 수집·업로드, ACT 학습·추론
+│       ├── tray/                       # Main/Assist 트레이 ROI 캘리브레이션
+│       └── pipeline/                   # 감기 시나리오 통합 실행 (Bash CLI + Flask UI)
 └── README.md
 ```
 
@@ -154,28 +147,28 @@ git clone https://github.com/huggingface/lerobot src/lerobot
 
 ## 학습 및 실행
 
-전체 명령어와 튜닝 가이드는 [`docs/command.md`](docs/command.md)에 정리되어 있다.
+전체 명령어와 튜닝 가이드는 [`docs/full_pipeline_guide.md`](docs/full_pipeline_guide.md)에 정리되어 있다. 최종 데모 5단계 요약만 필요하면 [`docs/command.md`](docs/command.md)를 참고한다.
 
 ### 손 감지 학습
 
 **단일 모델 학습** (기본값 YOLOv11n):
 
 ```bash
-scripts/train_hand_yolo.sh
+src/scripts/hand_yolo/train_hand_yolo.sh
 ```
 
 환경변수로 파라미터 조정 가능:
 
 ```bash
 MODEL=yolo11s.pt EPOCHS=100 BATCH=16 DEVICE=0 \
-  scripts/train_hand_yolo.sh
+  src/scripts/hand_yolo/train_hand_yolo.sh
 ```
 
 **n/s/m 크기 비교 스윕**:
 
 ```bash
 VARIANTS="n s m" EPOCHS=100 BATCH=16 DEVICE=0 \
-  scripts/train_hand_yolo_sweep.sh
+  src/scripts/hand_yolo/train_hand_yolo_sweep.sh
 ```
 
 세 크기(n < s < m)로 동일 조건 학습을 순차 실행하고 정확도·속도·용량 트레이드오프를 비교해서 배포할 모델을 결정한다.
@@ -204,13 +197,13 @@ VARIANTS="n s m" EPOCHS=100 BATCH=16 DEVICE=0 \
 **1. Leader 교시로 데이터 수집** (물체당 40 에피소드 목표):
 
 ```bash
-scripts/record_object_dataset.sh <object_name>
+src/scripts/imitation_learning/record_object_dataset.sh <object_name>
 ```
 
 **2. ACT 정책 학습** (기본 100K step, batch 8):
 
 ```bash
-scripts/train_act_objects.sh <object_name>
+src/scripts/imitation_learning/train_act_objects.sh <object_name>
 ```
 
 40 에피소드 전체를 학습에 사용하며 별도 train/valid split을 두지 않는다 (데이터가 적어 checkpoint 간 비교로 튜닝).
@@ -218,13 +211,13 @@ scripts/train_act_objects.sh <object_name>
 **3. HuggingFace Hub 업로드** (선택):
 
 ```bash
-scripts/upload_lerobot_dataset.sh <object_name>
+src/scripts/imitation_learning/upload_lerobot_dataset.sh <object_name>
 ```
 
 ### 통합 실행 (Safety-Gated Pick-and-Place)
 
 ```bash
-scripts/run_act_object.sh <object_name>
+src/scripts/imitation_learning/run_act_object.sh <object_name>
 ```
 
 기본으로 YOLO 손 감지 모델이 함께 실행된다. 감지 conf threshold는 `--safety-conf` 옵션으로 조정 (기본 0.15).
@@ -236,27 +229,27 @@ scripts/run_act_object.sh <object_name>
 - **물체 YOLO 학습** — 이미 수집된 LeRobot 에피소드에서 프레임을 추출해 YOLO 데이터셋으로 정리 후 학습.
 
   ```bash
-  python scripts/extract_object_yolo_frames.py
-  python scripts/prepare_object_yolo_dataset.py
-  scripts/train_object_yolo.sh
+  python src/scripts/object_yolo/extract_object_yolo_frames.py
+  python src/scripts/object_yolo/prepare_object_yolo_dataset.py
+  src/scripts/object_yolo/train_object_yolo.sh
   ```
 
 - **트레이 ROI 캘리브레이션** — Main / Assist 트레이 영역을 `config/object_tray_rois.json`에 저장.
 
   ```bash
-  python scripts/calibrate_tray_rois.py
+  python src/scripts/tray/calibrate_tray_rois.py
   ```
 
 - **검증형 ACT 실행** — 실행 전 Main 트레이에 목표 물체가 있는지, 실행 후 Assist 트레이로 이동했는지 YOLO로 확인하고 실패 시 자동 재시도.
 
   ```bash
-  scripts/run_verified_act_object.sh <object_name>
+  src/scripts/pipeline/run_verified_act_object.sh <object_name>
   ```
 
 - **감기 시나리오 데모** — 질병(감기) → 정적 도구 매핑(pill) → 검증형 실행까지 end-to-end.
 
   ```bash
-  scripts/run_cold_scenario.sh
+  src/scripts/pipeline/run_cold_scenario.sh
   ```
 
 ---
@@ -275,8 +268,11 @@ scripts/run_act_object.sh <object_name>
 
 | 문서                                                                                     | 내용                                                       |
 | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| [`docs/command.md`](docs/command.md)                                                     | 데이터 수집 → 분할 → 학습 → 평가 전체 워크플로 (한글 런북) |
+| [`docs/command.md`](docs/command.md)                                                     | 최종 데모 5단계 명령 요약                                  |
+| [`docs/full_pipeline_guide.md`](docs/full_pipeline_guide.md)                             | 데이터 수집 → 학습 → 평가 전체 워크플로 (한글 런북)        |
 | [`docs/hand_safety_dataset.md`](docs/hand_safety_dataset.md)                             | 손 감지 데이터셋 구성과 라벨링                             |
-| [`docs/hand_yolo_training.md`](docs/hand_yolo_training.md)                               | YOLO 학습 결과 보고서 (86 epoch, mAP50 0.975)              |
+| [`docs/hand_yolo_training.md`](docs/hand_yolo_training.md)                               | 손 감지 YOLO 학습 결과 보고서                              |
+| [`docs/object_yolo_training.md`](docs/object_yolo_training.md)                           | 물체 감지 YOLO 학습 결과 보고서                            |
+| [`docs/tray_roi_presentation.md`](docs/tray_roi_presentation.md)                         | 트레이 ROI 캘리브레이션 원리                               |
 | [`docs/diagrams/pipeline_diagram.excalidraw`](docs/diagrams/pipeline_diagram.excalidraw) | 학습 + 실시간 추론 전체 파이프라인                         |
 | [`docs/diagrams/user_scenario.excalidraw`](docs/diagrams/user_scenario.excalidraw)       | 사용자 시나리오 (도구 전달 흐름)                           |
