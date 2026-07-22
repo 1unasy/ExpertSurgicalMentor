@@ -1,6 +1,6 @@
 # ScrubBot
 
-![ScrubBot — 수술실 스크럽 간호사 로봇 · Hand-Safe Sterile Pick-and-Place](docs/diagrams/thumbnail.png)
+![ScrubBot — 수술실 스크럽 간호사 로봇 · Hand-Safe Sterile Pick-and-Place](docs/thumbnail.png)
 
 수술실에서 집도의에게 도구를 건네주는 **스크럽 간호사(scrub nurse)의 도구 전달 역할**을 대신하는 로봇 매니퓰레이터 시스템. 멸균 필드(sterile field) 오염을 방지하기 위해 카메라로 사람 손을 감시하다가 손이 감지되면 로봇 작업을 즉시 중단한다.
 
@@ -68,7 +68,7 @@ ScrubBot은 이 반복적인 pick-and-place 작업을 로봇 + 모방학습으�
 **통합**
 
 - 실시간 파이프라인에서 손 감지 시 로봇 정지 · 10초 클리어 후 재개 로직 동작 확인
-- 시연 영상은 발표 자료에 포함
+- 시연 영상: [Safety-Gated Pick-and-Place (YouTube)](https://youtu.be/LWk0X6FIwTQ)
 
 ---
 
