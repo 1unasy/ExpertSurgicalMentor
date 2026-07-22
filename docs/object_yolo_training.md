@@ -58,7 +58,7 @@ cd ~/ExpertSurgicalMentor
 ## 5. 선정 모델과 성능
 
 ```text
-outputs/train/object_yolo_v1/weights/best.pt
+models/object_yolo/best.pt
 ```
 
 Validation mAP50-95가 가장 높은 epoch 105의 결과:
@@ -84,7 +84,7 @@ outputs/train/object_yolo_v1_test/
 
 ```bash
 python ./src/scripts/object_yolo/object_yolo_verifier.py syringe \
-  --model outputs/train/object_yolo_v1/weights/best.pt \
+  --model models/object_yolo/best.pt \
   --roi-config config/object_tray_rois.json \
   --camera 4 --confidence 0.5 --frames 10 --required 5
 ```

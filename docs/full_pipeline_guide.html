@@ -88,10 +88,10 @@ nvidia-smi</code></pre>
     <tr><td>YOLO11m</td><td>23</td><td>0.8305</td><td>0.8889</td><td>0.9350</td><td>0.6733</td></tr>
   </tbody></table>
   <p><span class="good">배포 선정: YOLO11n</span> — 약 5.3MB이며 Precision 1.0, Recall 0.9984, mAP50 0.995를 유지해 ACT 동시 실행의 지연과 GPU 부담을 낮춘다. YOLO11s의 mAP50-95가 더 높지만 통합 실시간성을 우선했다.</p>
-  <pre><code>outputs/train/hand_yolo_n_sweep_stable_v1/weights/best.pt</code></pre>
+  <pre><code>models/hand_yolo/best.pt</code></pre>
   <h3>단독 실시간 확인</h3>
   <pre><code>yolo detect predict \
-  model=outputs/train/hand_yolo_n_sweep_stable_v1/weights/best.pt \
+  model=models/hand_yolo/best.pt \
   source=4 imgsz=640 conf=0.15 device=0 show=true save=false</code></pre>
   <p>통합 시 손 검출로 로봇을 hold하고, 손이 10초 연속 사라지면 현재 영상에서 ACT를 재계획한다.</p>
 </section>
@@ -118,11 +118,11 @@ python ./src/scripts/object_yolo/prepare_object_yolo_dataset.py \
   <table><thead><tr><th>Best epoch</th><th>Precision</th><th>Recall</th><th>mAP50</th><th>mAP50-95</th></tr></thead><tbody>
     <tr><td>105</td><td>0.9866</td><td>0.9982</td><td>0.9950</td><td>0.8795</td></tr>
   </tbody></table>
-  <pre><code>outputs/train/object_yolo_v1/weights/best.pt</code></pre>
+  <pre><code>models/object_yolo/best.pt</code></pre>
   <p class="small">Test 시각화는 outputs/train/object_yolo_v1_test/에 있다. 현재 CSV 요약은 없으므로 위 표는 validation 수치다.</p>
   <h3>위치 검증</h3>
   <pre><code>python ./src/scripts/object_yolo/object_yolo_verifier.py syringe \
-  --model outputs/train/object_yolo_v1/weights/best.pt \
+  --model models/object_yolo/best.pt \
   --roi-config config/object_tray_rois.json \
   --camera 4 --confidence 0.5 --frames 10 --required 5</code></pre>
 </section>

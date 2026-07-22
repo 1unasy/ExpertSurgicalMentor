@@ -1,7 +1,7 @@
 # 전체 파이프라인 실행 명령
 
 이 문서는 최종 데모에 필요한 다섯 단계만 정리한다. 과거 실험 명령은
-`backup/legacy/docs/command_legacy.md`에 보관한다.
+현재 파이프라인에 필요한 명령만 이 문서에서 관리한다.
 
 ## 1. 모방학습: 데이터·학습·추론
 
@@ -38,7 +38,7 @@ MODEL=yolo11n.pt RUN_NAME=hand_yolo_n_sweep_stable_v1 \
 최종 가중치:
 
 ```text
-outputs/train/hand_yolo_n_sweep_stable_v1/weights/best.pt
+models/hand_yolo/best.pt
 ```
 
 손 추론은 `run_act_object.sh` 내부에서 실행된다. 손 검출 시 현재 관절 위치를 유지하고,
@@ -56,14 +56,14 @@ python ./src/scripts/object_yolo/prepare_object_yolo_dataset.py
 최종 가중치:
 
 ```text
-outputs/train/object_yolo_v1/weights/best.pt
+models/object_yolo/best.pt
 ```
 
 단독 위치 검증:
 
 ```bash
 python ./src/scripts/object_yolo/object_yolo_verifier.py syringe \
-  --model outputs/train/object_yolo_v1/weights/best.pt \
+  --model models/object_yolo/best.pt \
   --roi-config config/object_tray_rois.json \
   --frames 10 --required 5
 ```

@@ -8,9 +8,9 @@ set -Eeuo pipefail
 
 PROJECT_ROOT="${PROJECT_ROOT:-$HOME/ExpertSurgicalMentor}"
 VERIFIED_RUNNER="${VERIFIED_RUNNER:-$PROJECT_ROOT/src/scripts/pipeline/run_verified_act_object.sh}"
-OBJECT_MODEL="${OBJECT_MODEL:-$PROJECT_ROOT/outputs/train/object_yolo_v1/weights/best.pt}"
+OBJECT_MODEL="${OBJECT_MODEL:-$PROJECT_ROOT/models/object_yolo/best.pt}"
 ROI_CONFIG="${ROI_CONFIG:-$PROJECT_ROOT/config/object_tray_rois.json}"
-HAND_MODEL="${SAFETY_YOLO_MODEL:-$PROJECT_ROOT/outputs/train/hand_yolo_n_sweep_stable_v1/weights/best.pt}"
+HAND_MODEL="${SAFETY_YOLO_MODEL:-$PROJECT_ROOT/models/hand_yolo/best.pt}"
 LEROBOT_DIR="${LEROBOT_DIR:-$PROJECT_ROOT/src/lerobot}"
 
 MODEL_PREFIX="${MODEL_PREFIX:-act_v2_full100k}"

@@ -163,7 +163,7 @@ Precision 1.0, Recall 0.9984, mAP50 0.995를 유지하면서 ACT와 동시에 �
 부담이 더 낮다. 즉 정확도 단일 지표보다 실시간 통합 안정성을 우선한 선택이다.
 
 ```text
-outputs/train/hand_yolo_n_sweep_stable_v1/weights/best.pt
+models/hand_yolo/best.pt
 ```
 
 Validation이 30장으로 작으므로 위 수치를 실제 안전 보증으로 해석하면 안 된다. 장갑, 조명,
@@ -173,7 +173,7 @@ Validation이 30장으로 작으므로 위 수치를 실제 안전 보증으로 
 
 ```bash
 yolo detect predict \
-  model=outputs/train/hand_yolo_n_sweep_stable_v1/weights/best.pt \
+  model=models/hand_yolo/best.pt \
   source=4 imgsz=640 conf=0.15 device=0 show=true save=false
 ```
 
@@ -235,7 +235,7 @@ python ./src/scripts/object_yolo/prepare_object_yolo_dataset.py \
 ### 5.4 선정 모델과 validation 성능
 
 ```text
-outputs/train/object_yolo_v1/weights/best.pt
+models/object_yolo/best.pt
 ```
 
 `results.csv`에서 mAP50-95가 가장 높은 epoch 105의 validation 결과다.
@@ -256,7 +256,7 @@ outputs/train/object_yolo_v1/weights/best.pt
 
 ```bash
 python ./src/scripts/object_yolo/object_yolo_verifier.py syringe \
-  --model outputs/train/object_yolo_v1/weights/best.pt \
+  --model models/object_yolo/best.pt \
   --roi-config config/object_tray_rois.json \
   --camera 4 --confidence 0.5 --frames 10 --required 5
 ```

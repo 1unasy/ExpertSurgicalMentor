@@ -4,7 +4,7 @@ set -Eeuo pipefail
 
 PROJECT_ROOT="${PROJECT_ROOT:-$HOME/ExpertSurgicalMentor}"
 VENV_DIR="${VENV_DIR:-$HOME/venv/il}"
-OBJECT_MODEL="${OBJECT_MODEL:-$PROJECT_ROOT/outputs/train/object_yolo_v1/weights/best.pt}"
+OBJECT_MODEL="${OBJECT_MODEL:-$PROJECT_ROOT/models/object_yolo/best.pt}"
 ROI_CONFIG="${ROI_CONFIG:-$PROJECT_ROOT/config/object_tray_rois.json}"
 MODEL_PREFIX="${MODEL_PREFIX:-act_v2_full100k}"
 CHECKPOINT="${CHECKPOINT:-050000}"

@@ -12,6 +12,10 @@ runs/
 *.torchscript
 *.mlmodel
 
+# Deployment weights are intentionally versioned.
+!models/
+!models/**/*.pt
+
 # Roboflow / dataset zips (extracted contents live under datasets/)
 *.zip
 
@@ -21,7 +25,6 @@ runs/
 datasets/hand/raw/
 datasets/objects/
 
-backup/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

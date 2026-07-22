@@ -24,4 +24,4 @@ python ./src/scripts/pipeline/run_cold_scenario_web.py
 ./src/scripts/pipeline/run_cold_scenario.sh 감기 --patient 환자A --dry-run
 ```
 
-사용하지 않는 과거 코드는 삭제하지 않고 `backup/legacy/`에 둔다.
+현재 파이프라인에 필요한 스크립트만 이 디렉터리에서 관리한다.

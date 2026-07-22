@@ -60,7 +60,7 @@ YOLO11n을 배포 모델로 선정한 이유:
 ## 5. 선정 모델
 
 ```text
-outputs/train/hand_yolo_n_sweep_stable_v1/weights/best.pt
+models/hand_yolo/best.pt
 ```
 
 관련 결과:
@@ -76,7 +76,7 @@ outputs/train/hand_yolo_n_sweep_stable_v1/val_batch0_pred.jpg
 
 ```bash
 yolo detect predict \
-  model=outputs/train/hand_yolo_n_sweep_stable_v1/weights/best.pt \
+  model=models/hand_yolo/best.pt \
   source=4 imgsz=640 conf=0.15 device=0 show=true save=false
 ```
 
