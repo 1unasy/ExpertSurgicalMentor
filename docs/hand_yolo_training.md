@@ -5,8 +5,8 @@
 로봇 작업 영역에 사람 손이 들어오는 상황을 front 카메라에서 감지하기 위해
 YOLO11n 단일 클래스 객체 감지 모델을 학습했다. wrist 카메라는 사각지대·그리퍼 방해로
 안전 검출에서 제외했다 (`docs/hand_safety_dataset.md` §1 참조). 현재 모델은 손을 감지하고
-화면에 박스를 표시할 수 있지만, 손 감지 결과를 로봇 정지 신호에 연결하는 기능은 아직
-별도 구현이 필요하다.
+화면에 박스를 표시하며, 손 감지 결과는 LeRobot 실행기의 일시 정지·재개 안전 로직에
+연결되어 있다.
 
 ## 2. 데이터셋
 
@@ -194,3 +194,121 @@ runs/
 yolo11n.pt
 *.cache
 ```
+
+## 9. YOLO11 n/s/m 손 감지 모델 비교 실험
+
+### 9.1 목적과 모델 역할
+
+동일한 손 데이터셋에서 YOLO11n, YOLO11s, YOLO11m의 검출 성능과 모델 크기를 비교했다.
+이 세 모델은 ACT 행동 정책을 대체하지 않는다. 파이프라인에서 선택되는 것은 **손 감지
+안전 모델**뿐이며, 물품별 ACT 모델과 syringe/pill 물체 검출 모델은 별도로 고정된다.
+
+```text
+YOLO11 n/s/m: 사람 손 감지 → 로봇 일시 정지·재개
+Object YOLO:  pill/syringe의 Main/Assist Tray 위치 검증
+ACT:          지정된 물품의 pick-and-place 행동 생성
+```
+
+### 9.2 데이터 및 실험 환경
+
+라벨링 전 `datasets/hand/raw` 원본은 학습 입력으로 사용하지 않았다. YOLO 형식으로
+라벨링된 다음 데이터만 사용했다.
+
+```text
+datasets/hand/yolo_v1/hospital.yolov11
+```
+
+| 분할 | 이미지 | 손 박스 | 배경 이미지 |
+|---|---:|---:|---:|
+| train | 120 | 88 | 34 |
+| valid | 30 | 18 | 12 |
+
+별도 test split은 없으므로 아래 결과는 30장 validation 기준이다. 실제 안전 성능을
+확정하려면 카메라·조명·손 방향·장갑 조건을 바꾼 현장 평가가 추가로 필요하다.
+
+```text
+GPU: NVIDIA GeForce RTX 4060 Laptop GPU (8GB)
+PyTorch: 2.10.0+cu128
+Ultralytics: 8.4.103
+Models: yolo11n.pt, yolo11s.pt, yolo11m.pt
+Image size: 640
+Batch size: 8
+Maximum epochs: 100
+Early-stopping patience: 20
+AMP: enabled
+Seed: 0 (Ultralytics deterministic mode)
+Optimizer: AdamW
+Initial learning rate: 0.0005
+```
+
+### 9.3 자동 optimizer 실험 실패와 안정화
+
+최초에는 세 모델 모두 `optimizer=auto`를 사용했다. YOLO11n은 정상 수렴했지만,
+Ultralytics가 자동 선택한 AdamW `lr=0.002`에서 YOLO11s는 validation fitness가 반복적으로
+붕괴했고 YOLO11m은 NaN이 4 epoch 지속되어 학습이 중단됐다.
+
+이는 GPU 메모리 부족이 아니라 작은 데이터셋에 비해 큰 모델의 학습률이 너무 높았던
+문제로 판단했다. 공정한 재비교에서는 세 모델 모두에 동일하게 `AdamW`,
+`lr0=0.0005`를 명시했다. 이를 위해 `scripts/train_hand_yolo.sh`가 `OPTIMIZER`, `LR0`
+환경변수를 받도록 확장됐다.
+
+재현 명령:
+
+```bash
+source ~/venv/il/bin/activate
+cd ~/ExpertSurgicalMentor
+
+VARIANTS="n s m" \
+SWEEP_TAG="sweep_stable_v1" \
+DEVICE=0 \
+BATCH=8 \
+EPOCHS=100 \
+PATIENCE=20 \
+OPTIMIZER=AdamW \
+LR0=0.0005 \
+./scripts/train_hand_yolo_sweep.sh
+```
+
+### 9.4 비교 결과
+
+각 모델의 `best.pt`에 해당하는 validation 결과다. `best_epoch`와 `total_epochs`는
+Ultralytics `results.csv`에 기록된 epoch 번호다.
+
+| 모델 | Best epoch | 종료 epoch | 시간(초) | 크기(MB) | Precision | Recall | mAP50 | mAP50-95 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| YOLO11n | 35 | 55 | 72.9 | 5.22 | **1.0000** | 0.9984 | **0.9950** | 0.7445 |
+| YOLO11s | 49 | 69 | 138.7 | 18.29 | 0.9448 | **1.0000** | 0.9892 | **0.7799** |
+| YOLO11m | 42 | 43 | 183.8 | 38.64 | 0.9079 | 0.9444 | 0.9656 | 0.6703 |
+
+결과 CSV:
+
+```text
+outputs/train/sweep_stable_v1_summary.csv
+```
+
+손 미탐을 줄이는 것이 우선인 안전 감지 용도에는 recall 1.0과 가장 높은 mAP50-95를
+기록한 **YOLO11s를 기본 후보**로 선택한다. 제어 주기 저하나 실시간 지연이 확인되면
+크기가 작고 성능 차이가 제한적인 YOLO11n을 대안으로 사용한다. YOLO11m은 더 크고
+느리면서 이번 validation 성능도 낮아 현재 환경에서는 채택하지 않는다.
+
+### 9.5 파이프라인에서 모델 선택
+
+YOLO11s를 사용한 감기 시나리오 설정 검사:
+
+```bash
+source ~/venv/il/bin/activate
+cd ~/ExpertSurgicalMentor
+
+SAFETY_YOLO_MODEL="$PWD/outputs/train/hand_yolo_s_sweep_stable_v1/weights/best.pt" \
+./scripts/run_cold_scenario.sh 감기 --dry-run
+```
+
+실제 전체 파이프라인 실행:
+
+```bash
+SAFETY_YOLO_MODEL="$PWD/outputs/train/hand_yolo_s_sweep_stable_v1/weights/best.pt" \
+./scripts/run_cold_scenario.sh 감기
+```
+
+모델 비교 시에는 위 경로에서 `s`만 `n` 또는 `m`으로 바꾼다. ACT 모델과 Object YOLO는
+동일하게 유지되므로 손 감지 모델의 오탐, 미탐, 중단·재개 지연을 비교할 수 있다.

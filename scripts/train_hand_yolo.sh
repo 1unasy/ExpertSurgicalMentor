@@ -12,6 +12,8 @@
 #   IMGSZ      input image size (default: 640, matches Roboflow export)
 #   PATIENCE   early-stop patience in epochs (default: 20)
 #   DEVICE     0 for CUDA, "mps" for Apple Silicon, "cpu", or unset = auto
+#   OPTIMIZER  optimizer name (default: auto)
+#   LR0        initial learning rate; omitted by default
 #   RUN_NAME   run subdirectory (default: hand_yolo_v1)
 #   OUTPUT_ROOT project root under which runs are saved (default: outputs/train)
 
@@ -26,6 +28,8 @@ BATCH="${BATCH:-16}"
 IMGSZ="${IMGSZ:-640}"
 PATIENCE="${PATIENCE:-20}"
 DEVICE="${DEVICE:-}"
+OPTIMIZER="${OPTIMIZER:-auto}"
+LR0="${LR0:-}"
 RUN_NAME="${RUN_NAME:-hand_yolo_v1}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-outputs/train}"
 
@@ -64,6 +68,8 @@ EOF
 
 device_arg=()
 [[ -n "$DEVICE" ]] && device_arg=("device=$DEVICE")
+optimizer_args=("optimizer=$OPTIMIZER")
+[[ -n "$LR0" ]] && optimizer_args+=("lr0=$LR0")
 
 train_images=$(ls "$DATASET_ROOT/train/images" | wc -l | tr -d ' ')
 val_images=$(ls "$DATASET_ROOT/valid/images" | wc -l | tr -d ' ')
@@ -79,6 +85,8 @@ echo "  epochs:   $EPOCHS  (patience: $PATIENCE)"
 echo "  batch:    $BATCH"
 echo "  imgsz:    $IMGSZ"
 echo "  device:   ${DEVICE:-auto}"
+echo "  optimizer: $OPTIMIZER"
+echo "  lr0:      ${LR0:-auto}"
 echo "  output:   $OUTPUT_ROOT/$RUN_NAME"
 echo "======================================================"
 echo
@@ -94,7 +102,8 @@ yolo detect train \
   name="$RUN_NAME" \
   exist_ok=false \
   pretrained=true \
-  "${device_arg[@]}"
+  "${device_arg[@]}" \
+  "${optimizer_args[@]}"
 
 BEST="$OUTPUT_ROOT/$RUN_NAME/weights/best.pt"
 echo
