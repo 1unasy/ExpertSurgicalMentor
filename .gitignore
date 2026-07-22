@@ -16,10 +16,10 @@ runs/
 *.zip
 
 # Raw captures are regenerable via scripts/collect_hand_images.py.
-# Labeled Roboflow exports under datasets/hand/yolo_v*/ ARE
-committed so the
+# Labeled Roboflow exports under datasets/hand/yolo_v*/ are committed so the
 # robot PC can pull them for training.
 datasets/hand/raw/
+datasets/objects/yolo_v1/unlabeled/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
