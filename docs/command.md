@@ -646,6 +646,45 @@ run_object syringe
 }
 ```
 
+### 감기 시나리오 전체 파이프라인
+
+현재 교육용 감기 시나리오는 허용 목록에서 `감기/cold → pill`로 매핑한다. 실행 순서는
+질병 입력 검증 → Main Tray pill 검출 → 손 안전 감시가 적용된 ACT 실행 → Assist Tray 결과
+검증 → 안전하게 재시도 가능한 경우 1회 재시도이다.
+
+처음 한 번, front 카메라와 두 트레이를 최종 위치에 고정한 뒤 ROI를 지정한다.
+
+```bash
+source ~/venv/il/bin/activate
+cd ~/ExpertSurgicalMentor
+python scripts/calibrate_tray_rois.py --camera 4
+```
+
+로봇을 움직이지 않고 모델·ROI·checkpoint 설정만 검사한다.
+
+```bash
+./scripts/run_cold_scenario.sh 감기 --dry-run
+```
+
+전체 파이프라인을 실행한다.
+
+```bash
+./scripts/run_cold_scenario.sh 감기
+```
+
+checkpoint와 재시도 횟수를 지정할 수도 있다.
+
+```bash
+./scripts/run_cold_scenario.sh cold \
+  --checkpoint 050000 \
+  --action-steps 100 \
+  --episode-time 30 \
+  --max-retries 1
+```
+
+ROI 보정은 카메라나 트레이 위치가 바뀔 때마다 다시 수행한다. 실제 실행 중에는 비상 정지
+수단을 즉시 사용할 수 있어야 한다.
+
 ## 12. 실제 평가 기준
 
 각 정책을 다음 조건에서 평가한다.

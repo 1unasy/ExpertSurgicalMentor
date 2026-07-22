@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 2
+names: ['pill', 'syringe']
+
+roboflow:
+  workspace: s-workspace-bue1w
+  project: scrubbot
+  version: dataset
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/s-workspace-bue1w/scrubbot/dataset/dataset

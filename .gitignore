@@ -20,6 +20,7 @@ runs/
 # robot PC can pull them for training.
 datasets/hand/raw/
 datasets/objects/yolo_v1/unlabeled/
+datasets/objects_grouped/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
