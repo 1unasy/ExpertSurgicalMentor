@@ -12,15 +12,15 @@ LEADER_PORT="${LEADER_PORT:-/dev/ttyACM1}"
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/record_object_dataset.sh new  DATASET_NAME OBJECT COUNT
-  ./scripts/record_object_dataset.sh more DATASET_NAME OBJECT COUNT
+  ./src/scripts/imitation_learning/record_object_dataset.sh new  DATASET_NAME OBJECT COUNT
+  ./src/scripts/imitation_learning/record_object_dataset.sh more DATASET_NAME OBJECT COUNT
 
 Objects:
   syringe | glasses | pill | xray
 
 Examples:
-  ./scripts/record_object_dataset.sh new  pick_and_place_v2 syringe 10
-  ./scripts/record_object_dataset.sh more pick_and_place_v2 glasses 10
+  ./src/scripts/imitation_learning/record_object_dataset.sh new  pick_and_place_v2 syringe 10
+  ./src/scripts/imitation_learning/record_object_dataset.sh more pick_and_place_v2 glasses 10
 
 Environment overrides:
   HF_USER, FOLLOWER_PORT, LEADER_PORT, PROJECT_ROOT, LEROBOT_DIR, VENV_DIR

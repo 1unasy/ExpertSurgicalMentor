@@ -9,23 +9,24 @@ HF_USER="${HF_USER:-1unasy}"
 ROBOT_PORT="${ROBOT_PORT:-/dev/ttyACM0}"
 START_POSE_PATH="${START_POSE_PATH:-$PROJECT_ROOT/config/omx_start_pose.json}"
 MODEL_PREFIX="${MODEL_PREFIX:-act_v2}"
-SAFETY_YOLO_MODEL="${SAFETY_YOLO_MODEL:-$PROJECT_ROOT/outputs/train/hand_yolo_v1/weights/best.pt}"
+SAFETY_YOLO_MODEL="${SAFETY_YOLO_MODEL:-$PROJECT_ROOT/outputs/train/hand_yolo_s_sweep_stable_v1/weights/best.pt}"
 SAFETY_CONF="${SAFETY_CONF:-0.15}"
 SAFETY_CLEAR_S="${SAFETY_CLEAR_S:-10}"
 SAFETY_CAMERA="${SAFETY_CAMERA:-front}"
 SAFETY_DEVICE="${SAFETY_DEVICE:-0}"
+CAMERA_PREVIEW_OUTPUT="${CAMERA_PREVIEW_OUTPUT:-$PROJECT_ROOT/outputs/runtime/front_camera_latest.jpg}"
 
 EPISODES=1
 EPISODE_TIME_S=15
 RESET_TIME_S=10
 RETURN_TIME_S=5
 ACTION_STEPS=20
-CHECKPOINT="last"
+CHECKPOINT="050000"
 
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/run_act_object.sh OBJECT [options]
+  ./src/scripts/imitation_learning/run_act_object.sh OBJECT [options]
 
 Objects:
   syringe | glasses | pill | xray
@@ -36,7 +37,7 @@ Options:
   --reset-time SEC      Manual scene reset time between episodes (default: 10)
   --return-time SEC     Automatic start-pose return duration (default: 5)
   --action-steps N      ACT actions executed before replanning (default: 20)
-  --checkpoint NAME     Checkpoint directory, e.g. 020000 or last (default: last)
+  --checkpoint NAME     Checkpoint directory, e.g. 050000 or last (default: 050000)
   --safety-clear SEC    Continuous no-hand time before resuming (default: 10)
   --safety-conf VALUE   YOLO hand confidence threshold (default: 0.15)
   --no-safety           Disable YOLO hand safety (not recommended)
@@ -47,12 +48,12 @@ Environment overrides:
   SAFETY_YOLO_MODEL, SAFETY_CONF, SAFETY_CLEAR_S, SAFETY_CAMERA, SAFETY_DEVICE
 
 Examples:
-  ./scripts/run_act_object.sh syringe
-  ./scripts/run_act_object.sh syringe --episodes 10
-  ./scripts/run_act_object.sh syringe --episodes 10 --safety-clear 10 --safety-conf 0.15
-  ./scripts/run_act_object.sh syringe --action-steps 30
-  MODEL_PREFIX=act_v2_full100k ./scripts/run_act_object.sh syringe --checkpoint 040000
-  ROBOT_PORT=/dev/omx_follower ./scripts/run_act_object.sh pill
+  ./src/scripts/imitation_learning/run_act_object.sh syringe
+  ./src/scripts/imitation_learning/run_act_object.sh syringe --episodes 10
+  ./src/scripts/imitation_learning/run_act_object.sh syringe --episodes 10 --safety-clear 10 --safety-conf 0.15
+  ./src/scripts/imitation_learning/run_act_object.sh syringe --action-steps 30
+  MODEL_PREFIX=act_v2_full100k ./src/scripts/imitation_learning/run_act_object.sh syringe --checkpoint 040000
+  ROBOT_PORT=/dev/omx_follower ./src/scripts/imitation_learning/run_act_object.sh pill
 EOF
 }
 
@@ -226,6 +227,9 @@ echo
 echo "The follower will move to the configured start pose before inference."
 
 cd "$LEROBOT_DIR"
+
+export LEROBOT_UI_CAMERA_PREVIEW_PATH="$CAMERA_PREVIEW_OUTPUT"
+export LEROBOT_UI_CAMERA_PREVIEW_NAME="front"
 
 SAFETY_ARGS=()
 if [[ -n "$SAFETY_YOLO_MODEL" ]]; then

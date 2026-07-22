@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """OMX-Follower keyboard teleop (python3)."""
 
-from __future__ import annotations
-
 import argparse
 import select
 import sys
@@ -204,7 +202,7 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=(
             "Example:\n"
-            "  python3 omx_f_keyboard_teleop.py --port /dev/ttyACM0\n"
+            "  python3 ./src/omx_f_keyboard_teleop.py --port /dev/ttyACM0\n"
         ),
     )
     parser.add_argument("--port", default=DEFAULT_PORT, help=f"Serial port for OMX-F (default: {DEFAULT_PORT}).")

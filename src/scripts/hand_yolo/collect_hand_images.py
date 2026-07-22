@@ -9,10 +9,10 @@ docs/hand_safety_dataset.md. Wrist-view conditions (B1/B2/N4) can be:
   - simulated now by mounting/holding the single camera close to the workspace.
 
 Usage:
-    python3 scripts/collect_hand_images.py --cam 0 --out datasets/hand/raw
+    python3 ./src/scripts/hand_yolo/collect_hand_images.py --cam 0 --out datasets/hand/raw
 
 Probe available indices first:
-    python3 scripts/collect_hand_images.py --list-cameras
+    python3 ./src/scripts/hand_yolo/collect_hand_images.py --list-cameras
 
 Runtime keys (preview window focused):
     SPACE  capture one frame for the active condition
@@ -25,8 +25,6 @@ Runtime keys (preview window focused):
     s      mark current condition as satisfied (skip)
     q / ESC quit
 """
-
-from __future__ import annotations
 
 import argparse
 import platform

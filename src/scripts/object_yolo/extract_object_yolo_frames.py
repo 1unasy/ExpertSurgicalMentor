@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Extract evenly spaced front-camera frames from a LeRobot dataset for bbox labeling."""
 
-from __future__ import annotations
-
 import argparse
 import csv
 import os

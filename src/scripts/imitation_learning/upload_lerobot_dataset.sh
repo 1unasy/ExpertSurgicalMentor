@@ -6,7 +6,7 @@ VENV_DIR="${VENV_DIR:-$HOME/venv/il}"
 HF_USER="${HF_USER:-1unasy}"
 
 if [[ $# -ne 1 ]]; then
-  echo "Usage: ./scripts/upload_lerobot_dataset.sh DATASET_NAME" >&2
+  echo "Usage: ./src/scripts/imitation_learning/upload_lerobot_dataset.sh DATASET_NAME" >&2
   exit 2
 fi
 
@@ -14,7 +14,6 @@ DATASET_NAME="$1"
 if ! [[ "$DATASET_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
   echo "ERROR: Invalid DATASET_NAME: $DATASET_NAME" >&2
   exit 2
-fi
 fi
 
 DATASET_ID="${HF_USER}/${DATASET_NAME}"

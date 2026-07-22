@@ -17,15 +17,15 @@ USE_AMP="${USE_AMP:-true}"
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/train_act_objects.sh OBJECT [OBJECT ...]
+  ./src/scripts/imitation_learning/train_act_objects.sh OBJECT [OBJECT ...]
 
 Objects:
   syringe | pill | glasses | xray
 
 Examples:
-  ./scripts/train_act_objects.sh syringe pill
-  ./scripts/train_act_objects.sh glasses xray
-  STEPS=30000 SAVE_FREQ=5000 ./scripts/train_act_objects.sh syringe
+  ./src/scripts/imitation_learning/train_act_objects.sh syringe pill
+  ./src/scripts/imitation_learning/train_act_objects.sh glasses xray
+  STEPS=30000 SAVE_FREQ=5000 ./src/scripts/imitation_learning/train_act_objects.sh syringe
 
 Environment overrides:
   HF_USER, DATASET_PREFIX, OUTPUT_PREFIX, BATCH_SIZE, STEPS, SAVE_FREQ,
