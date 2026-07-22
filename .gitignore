@@ -19,7 +19,7 @@ runs/
 # Labeled Roboflow exports under datasets/hand/yolo_v*/ are committed so the
 # robot PC can pull them for training.
 datasets/hand/raw/
-datasets/objects/yolo_v1/unlabeled/
+datasets/objects/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -239,3 +239,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local training and evaluation datasets
+/datasets/
