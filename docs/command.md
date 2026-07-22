@@ -260,79 +260,29 @@ cd ~/ExpertSurgicalMentor/src/lerobot && lerobot-edit-dataset \
 1unasy/pick_and_place_v2_pill
 ```
 
-### 40개 syringe 데이터의 train/valid/test 분할
+### Syringe와 pill 전체 40개·100,000 step 순차 학습
 
-물체별 40개 데이터는 다음처럼 `28/6/6`으로 분할한다. 비율 기반 split은 에피소드를
-앞에서부터 순서대로 자르므로, 아래 스크립트는 수집 순서 전체에서 valid/test를 고르게
-선택한다.
+데이터가 적으므로 별도 train/valid 분할 없이 각 물체의 40개 에피소드 전체를 학습에
+사용한다. 과적합 여부는 10,000 step마다 저장된 checkpoint를 실제 로봇의 새로운 배치에서
+비교한다.
 
 ```bash
 cd ~/ExpertSurgicalMentor
-
-./scripts/split_lerobot_40.sh pick_and_place_v2_syringe
+./scripts/train_act_objects.sh syringe pill
 ```
 
-생성 결과:
+기본 설정:
 
 ```text
-1unasy/pick_and_place_v2_syringe_train   # 28 episodes
-1unasy/pick_and_place_v2_syringe_valid   #  6 episodes
-1unasy/pick_and_place_v2_syringe_test    #  6 episodes
+dataset:    1unasy/pick_and_place_v2_<object> (각 40 episodes 전체)
+steps:      100000
+batch_size: 8
+save_freq:  10000
+output:     outputs/train/act_v2_full100k_<object>
 ```
 
-기존 분할 폴더가 있으면 스크립트는 덮어쓰지 않고 종료한다. ACT 학습에는 `_train`만
-사용하고, `_valid`는 체크포인트 선택에, `_test`는 최종 모델을 한 번 평가할 때 사용한다.
-현재 `lerobot-train`의 `eval_freq`는 이 offline valid 데이터셋을 자동 평가하는 옵션이
-아니므로 valid/test 성공률은 실제 로봇에서 같은 시작 조건으로 별도 기록한다.
-
-분할된 28개 train 에피소드만 사용해 별도 출력 폴더로 학습하려면:
-
-```bash
-cd ~/ExpertSurgicalMentor
-
-DATASET_SPLIT=train \
-OUTPUT_PREFIX=act_v2_split \
-STEPS=20000 \
-BATCH_SIZE=8 \
-./scripts/train_act_objects.sh syringe
-```
-
-40개 분할부터 syringe 100,000 step 학습까지 한 번에 수행:
-
-```bash
-cd ~/ExpertSurgicalMentor
-./scripts/split_train_syringe_100k.sh
-```
-
-기본 출력은 `src/lerobot/outputs/train/act_v2_split100k_syringe`이며 10,000 step마다
-체크포인트를 저장한다. `--wait-for-pid PID --tmux-target 0:0.0` 옵션은 현재 tmux
-foreground 학습 PID가 끝난 뒤 같은 pane에 위 명령을 자동으로 전달할 때 사용한다.
-
-### Syringe와 pill 분할 및 100,000 step 순차 학습
-
-각 물체의 40개 에피소드를 `train 28 / valid 6 / test 6`으로 나눈 뒤 train split만
-사용하여 syringe, pill 순서로 학습한다.
-
-```bash
-cd ~/ExpertSurgicalMentor
-./scripts/split_train_act_objects_100k.sh syringe pill
-```
-
-현재 학습 PID가 종료됐는지 30분마다 확인하고, 종료 후 tmux `0:0.0`에서 자동 시작:
-
-```bash
-cd ~/ExpertSurgicalMentor
-
-nohup ./scripts/split_train_act_objects_100k.sh \
-  --wait-for-pid CURRENT_TRAIN_PID \
-  --tmux-target 0:0.0 \
-  syringe pill \
-  > /tmp/esm_act_objects_100k_queue.log 2>&1 &
-```
-
-`valid`는 체크포인트 선택용, `test`는 최종 평가용으로 남겨 둔다. 현재 LeRobot ACT
-학습 명령은 offline valid/test를 자동 평가하지 않으므로 실제 로봇 성공률을 각 split의
-초기 배치 조건에 맞춰 별도로 기록한다.
+syringe가 완료되면 pill 학습을 순차적으로 시작한다. 최종 모델 선택은 `10k`, `20k`,
+`30k` 등의 checkpoint를 새로운 위치·회전 배치에서 반복 평가하여 결정한다.
 
 확인:
 
@@ -642,6 +592,33 @@ YOLO 오검출이 많으면 `--safety-conf`를 조금 높이고, 손을 놓치�
 안전 기능을 끈 비교 실험은 `--no-safety`로 가능하지만 실제 로봇 시연에는 권장하지 않는다.
 이 기능은 소프트웨어 보조 장치이므로 비상 정지 수단을 즉시 사용할 수 있는 상태로 시험한다.
 
+### 100k 모델의 checkpoint 비교
+
+`--checkpoint`로 `010000`부터 `100000` 또는 `last`를 직접 선택할 수 있다. 비교할 때는
+카메라, 초기 자세, 물체 배치, `action-steps`를 모두 동일하게 유지하고 먼저 YOLO를 끈다.
+
+```bash
+cd ~/ExpertSurgicalMentor
+
+MODEL_PREFIX=act_v2_full100k ./scripts/run_act_object.sh syringe \
+  --checkpoint 020000 --episodes 5 --action-steps 30 --no-safety
+
+MODEL_PREFIX=act_v2_full100k ./scripts/run_act_object.sh syringe \
+  --checkpoint 040000 --episodes 5 --action-steps 30 --no-safety
+
+MODEL_PREFIX=act_v2_full100k ./scripts/run_act_object.sh syringe \
+  --checkpoint 060000 --episodes 5 --action-steps 30 --no-safety
+
+MODEL_PREFIX=act_v2_full100k ./scripts/run_act_object.sh syringe \
+  --checkpoint 080000 --episodes 5 --action-steps 30 --no-safety
+
+MODEL_PREFIX=act_v2_full100k ./scripts/run_act_object.sh syringe \
+  --checkpoint 100000 --episodes 5 --action-steps 30 --no-safety
+```
+
+각 실행 결과 데이터셋 이름에는 checkpoint 번호가 포함된다. 전체 성공률이 가장 높은
+checkpoint를 고른 다음에만 YOLO 손 안전 기능을 켜서 통합 평가한다.
+
 VLM 연동 시에는 VLM 출력값을 그대로 셸 명령으로 실행하지 않고, `syringe`, `glasses`,
 `pill`, `xray` 중 하나인지 검증한 뒤 이 실행 파일의 첫 번째 인자로 전달한다. 실행 파일도
 동일한 허용 목록을 검사하며 선택된 물품에 맞는 ACT 모델과 task 문자열만 불러온다.
@@ -668,6 +645,45 @@ run_object syringe
   "tools": ["syringe", "pill"]
 }
 ```
+
+### 감기 시나리오 전체 파이프라인
+
+현재 교육용 감기 시나리오는 허용 목록에서 `감기/cold → pill`로 매핑한다. 실행 순서는
+질병 입력 검증 → Main Tray pill 검출 → 손 안전 감시가 적용된 ACT 실행 → Assist Tray 결과
+검증 → 안전하게 재시도 가능한 경우 1회 재시도이다.
+
+처음 한 번, front 카메라와 두 트레이를 최종 위치에 고정한 뒤 ROI를 지정한다.
+
+```bash
+source ~/venv/il/bin/activate
+cd ~/ExpertSurgicalMentor
+python scripts/calibrate_tray_rois.py --camera 4
+```
+
+로봇을 움직이지 않고 모델·ROI·checkpoint 설정만 검사한다.
+
+```bash
+./scripts/run_cold_scenario.sh 감기 --dry-run
+```
+
+전체 파이프라인을 실행한다.
+
+```bash
+./scripts/run_cold_scenario.sh 감기
+```
+
+checkpoint와 재시도 횟수를 지정할 수도 있다.
+
+```bash
+./scripts/run_cold_scenario.sh cold \
+  --checkpoint 050000 \
+  --action-steps 100 \
+  --episode-time 30 \
+  --max-retries 1
+```
+
+ROI 보정은 카메라나 트레이 위치가 바뀔 때마다 다시 수행한다. 실제 실행 중에는 비상 정지
+수단을 즉시 사용할 수 있어야 한다.
 
 ## 12. 실제 평가 기준
 

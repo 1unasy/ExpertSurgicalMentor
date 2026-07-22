@@ -7,12 +7,11 @@ LEROBOT_DIR="${LEROBOT_DIR:-$PROJECT_ROOT/src/lerobot}"
 VENV_DIR="${VENV_DIR:-$HOME/venv/il}"
 HF_USER="${HF_USER:-1unasy}"
 DATASET_PREFIX="${DATASET_PREFIX:-pick_and_place_v2}"
-DATASET_SPLIT="${DATASET_SPLIT:-}"
-OUTPUT_PREFIX="${OUTPUT_PREFIX:-act_v2}"
+OUTPUT_PREFIX="${OUTPUT_PREFIX:-act_v2_full100k}"
 
 BATCH_SIZE="${BATCH_SIZE:-8}"
-STEPS="${STEPS:-20000}"
-SAVE_FREQ="${SAVE_FREQ:-5000}"
+STEPS="${STEPS:-100000}"
+SAVE_FREQ="${SAVE_FREQ:-10000}"
 USE_AMP="${USE_AMP:-true}"
 
 usage() {
@@ -26,14 +25,15 @@ Objects:
 Examples:
   ./scripts/train_act_objects.sh syringe pill
   ./scripts/train_act_objects.sh glasses xray
-  STEPS=30000 BATCH_SIZE=8 ./scripts/train_act_objects.sh syringe
+  STEPS=30000 SAVE_FREQ=5000 ./scripts/train_act_objects.sh syringe
 
 Environment overrides:
-  HF_USER, DATASET_PREFIX, DATASET_SPLIT, OUTPUT_PREFIX, BATCH_SIZE, STEPS, SAVE_FREQ,
+  HF_USER, DATASET_PREFIX, OUTPUT_PREFIX, BATCH_SIZE, STEPS, SAVE_FREQ,
   USE_AMP, PROJECT_ROOT, LEROBOT_DIR, VENV_DIR
 
-Split-dataset example:
-  DATASET_SPLIT=train OUTPUT_PREFIX=act_v2_split ./scripts/train_act_objects.sh syringe
+Defaults:
+  Uses all episodes in pick_and_place_v2_<object>, trains 100,000 steps,
+  saves every 10,000 steps, and writes act_v2_full100k_<object>.
 EOF
 }
 
@@ -87,11 +87,6 @@ if [[ ! -d "$LEROBOT_DIR" ]]; then
   exit 1
 fi
 
-if [[ -n "$DATASET_SPLIT" && ! "$DATASET_SPLIT" =~ ^(train|valid|test)$ ]]; then
-  echo "ERROR: DATASET_SPLIT must be empty, train, valid, or test." >&2
-  exit 2
-fi
-
 for value_name in BATCH_SIZE STEPS SAVE_FREQ; do
   value="${!value_name}"
   if ! [[ "$value" =~ ^[1-9][0-9]*$ ]]; then
@@ -120,7 +115,6 @@ echo "ACT 순차 학습을 시작합니다."
 echo "순서: ${OBJECTS[*]}"
 echo "HF_USER: $HF_USER"
 echo "dataset_prefix: $DATASET_PREFIX"
-echo "dataset_split: ${DATASET_SPLIT:-all}"
 echo "output_prefix: $OUTPUT_PREFIX"
 echo "batch_size: $BATCH_SIZE"
 echo "steps: $STEPS"
@@ -130,7 +124,7 @@ echo
 
 for object in "${OBJECTS[@]}"; do
   CURRENT_OBJECT="$object"
-  dataset_repo="${HF_USER}/${DATASET_PREFIX}_${object}${DATASET_SPLIT:+_${DATASET_SPLIT}}"
+  dataset_repo="${HF_USER}/${DATASET_PREFIX}_${object}"
   dataset_dir="$HOME/.cache/huggingface/lerobot/${dataset_repo}"
   output_dir="outputs/train/${OUTPUT_PREFIX}_${object}"
   final_model="${output_dir}/checkpoints/last/pretrained_model"

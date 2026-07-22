@@ -20,6 +20,7 @@ EPISODE_TIME_S=15
 RESET_TIME_S=10
 RETURN_TIME_S=5
 ACTION_STEPS=20
+CHECKPOINT="last"
 
 usage() {
   cat <<'EOF'
@@ -35,6 +36,7 @@ Options:
   --reset-time SEC      Manual scene reset time between episodes (default: 10)
   --return-time SEC     Automatic start-pose return duration (default: 5)
   --action-steps N      ACT actions executed before replanning (default: 20)
+  --checkpoint NAME     Checkpoint directory, e.g. 020000 or last (default: last)
   --safety-clear SEC    Continuous no-hand time before resuming (default: 10)
   --safety-conf VALUE   YOLO hand confidence threshold (default: 0.15)
   --no-safety           Disable YOLO hand safety (not recommended)
@@ -49,6 +51,7 @@ Examples:
   ./scripts/run_act_object.sh syringe --episodes 10
   ./scripts/run_act_object.sh syringe --episodes 10 --safety-clear 10 --safety-conf 0.15
   ./scripts/run_act_object.sh syringe --action-steps 30
+  MODEL_PREFIX=act_v2_full100k ./scripts/run_act_object.sh syringe --checkpoint 040000
   ROBOT_PORT=/dev/omx_follower ./scripts/run_act_object.sh pill
 EOF
 }
@@ -88,6 +91,10 @@ while [[ $# -gt 0 ]]; do
       ACTION_STEPS="${2:?--action-steps requires a value}"
       shift 2
       ;;
+    --checkpoint)
+      CHECKPOINT="${2:?--checkpoint requires a value}"
+      shift 2
+      ;;
     --safety-clear)
       SAFETY_CLEAR_S="${2:?--safety-clear requires a value}"
       shift 2
@@ -119,6 +126,11 @@ fi
 
 if ! [[ "$ACTION_STEPS" =~ ^[1-9][0-9]*$ ]] || (( ACTION_STEPS > 100 )); then
   echo "ERROR: --action-steps must be an integer between 1 and 100." >&2
+  exit 2
+fi
+
+if [[ "$CHECKPOINT" != "last" && ! "$CHECKPOINT" =~ ^[0-9]{6}$ ]]; then
+  echo "ERROR: --checkpoint must be 'last' or a six-digit directory such as 020000." >&2
   exit 2
 fi
 
@@ -184,7 +196,7 @@ if [[ -n "$SAFETY_YOLO_MODEL" && ! -f "$SAFETY_YOLO_MODEL" ]]; then
   exit 1
 fi
 
-MODEL_PATH="$LEROBOT_DIR/outputs/train/${MODEL_PREFIX}_${OBJECT}/checkpoints/last/pretrained_model"
+MODEL_PATH="$LEROBOT_DIR/outputs/train/${MODEL_PREFIX}_${OBJECT}/checkpoints/${CHECKPOINT}/pretrained_model"
 if [[ ! -d "$MODEL_PATH" ]]; then
   echo "ERROR: Trained model not found: $MODEL_PATH" >&2
   exit 1
@@ -194,11 +206,12 @@ fi
 source "$VENV_DIR/bin/activate"
 
 RUN_ID="$(date +%Y%m%d_%H%M%S_%N)"
-EVAL_REPO_ID="${HF_USER}/eval_${OBJECT}_${RUN_ID}"
+EVAL_REPO_ID="${HF_USER}/eval_${OBJECT}_${CHECKPOINT}_${RUN_ID}"
 
 echo "Object:       $OBJECT"
 echo "Task:         $TASK"
 echo "Model:        $MODEL_PATH"
+echo "Checkpoint:   $CHECKPOINT"
 echo "Robot port:   $ROBOT_PORT"
 echo "Start pose:   $START_POSE_PATH"
 echo "Episodes:     $EPISODES"
