@@ -203,6 +203,14 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
+# Downloaded Hugging Face videos and local VLM evaluation outputs
+data/hf_cache/
+results/vlm_pick_place_v2/
+
+# Local runtime logs and datasets
+/logs/
+/data/
+
 # Ruff stuff:
 .ruff_cache/
 

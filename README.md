@@ -147,6 +147,46 @@ python3 scripts/evaluate_vlm_inventory.py \
 
 한 모델만 평가하려면 `--model qwen3_vl_2b`처럼 `config/vlm_models.json`의 key를 지정한다.
 
+### Hugging Face pick-and-place 모델 비교
+
+`1unasy/pick_and_place_v2`는 LeRobot v3 형식의 공개 데이터셋으로, Syringe 40개와 Pill 40개의 pick-and-place 에피소드를 제공한다. 다음 명령은 고정된 데이터셋 revision에서 front 카메라 영상을 내려받고, 각 에피소드 시작부와 종료부에서 연속 3프레임씩 추출한 뒤 설정된 세 VLM을 동일 조건으로 비교한다.
+
+```bash
+python3 scripts/evaluate_hf_pick_place_vlm.py
+```
+
+전체 실행 전 모델 하나와 물품별 2개 에피소드로 다운로드·추론 경로를 점검할 수 있다.
+
+```bash
+python3 scripts/evaluate_hf_pick_place_vlm.py \
+  --model qwen3_vl_2b \
+  --episodes-per-tool 2
+```
+
+결과는 터미널에 하나의 Markdown 표로 출력되며 다음 파일에도 저장된다.
+
+- `results/vlm_pick_place_v2/comparison.md`: 모델별 단일 비교표
+- `results/vlm_pick_place_v2/comparison.json`: 집계값과 프레임별 원시 판정
+
+표는 Schema 유효율, 수행 전 대상 물품의 MainToolTray 존재 정확도, 수행 후 AssistTray 이동 정확도, 에피소드 전체 성공률, 3프레임 합의율, 위험 false positive, P95 지연시간과 peak VRAM을 제공한다. 데이터셋 메타데이터에는 대상 작업만 있고 다른 물품의 트레이 정답은 없으므로, 정확도는 각 에피소드의 대상 물품만 채점한다.
+
+로그인 노드에서 GPU를 직접 사용할 수 없는 Slurm 환경에서는 물품별 5개, 총 10개 에피소드를 다음처럼 제출한다.
+
+```bash
+mkdir -p logs
+sbatch \
+  --job-name=vlm_pick_place_10 \
+  --gres=gpu:1 \
+  --cpus-per-task=8 \
+  --mem=32G \
+  --time=04:00:00 \
+  --output=logs/vlm_pick_place_10-%j.out \
+  --error=logs/vlm_pick_place_10-%j.err \
+  scripts/slurm_evaluate_hf_pick_place_vlm.sh 5
+```
+
+클러스터가 파티션 지정을 요구하면 위 명령에 `--partition=<GPU_PARTITION>`을 추가한다. `MODEL=qwen3_vl_2b`처럼 환경변수를 export하면 단일 모델만 평가할 수 있다.
+
 ```bash
 python3 -m expert_surgical_mentor.vlm.node \
   --model qwen3_vl_2b
