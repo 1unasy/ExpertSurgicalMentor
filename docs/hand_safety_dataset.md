@@ -12,9 +12,9 @@
 | Train / Val      | 120 / 30 (8:2 stratified)                                                       |
 | 클래스           | `hand` (단일)                                                                   |
 | 검출 대상 카메라 | **front 카메라 단독** — 조기 검출에 유리, wrist는 사각지대·그리퍼 방해로 부적합 |
-| 학습 모델        | YOLOv11n                                                                        |
-| 학습 스크립트    | `scripts/train_hand_yolo.sh`                                                    |
-| 수집 도구        | `scripts/collect_hand_images.py`                                                |
+| 배포 모델        | YOLO11n (`hand_yolo_n_sweep_stable_v1/weights/best.pt`)                         |
+| 학습 스크립트    | `src/scripts/hand_yolo/train_hand_yolo.sh`                                                    |
+| 수집 도구        | `src/scripts/hand_yolo/collect_hand_images.py`                                                |
 
 ## 2. 데이터 분포 (실측)
 
@@ -53,7 +53,7 @@ datasets/hand/
 │   ├── A1_front_entering/                  # 조건별 폴더
 │   ├── ...
 │   └── N3_front_bg_robot/
-└── yolo_v1/                                # Roboflow export (git tracked)
+└── yolo_v1/                                # Roboflow export (현재 datasets/ 전체 gitignored)
     └── hospital.yolov11/
         ├── train/
         │   ├── images/                     # 120 JPG
@@ -72,7 +72,7 @@ datasets/hand/
 
 ## 5. 수집 도구 사용법
 
-`scripts/collect_hand_images.py` — 단일 카메라 인터랙티브 캡처.
+`src/scripts/hand_yolo/collect_hand_images.py` — 단일 카메라 인터랙티브 캡처.
 
 ### 사전 준비 (macOS)
 
@@ -82,7 +82,7 @@ datasets/hand/
 ### 카메라 인덱스 확인
 
 ```bash
-python3 scripts/collect_hand_images.py --list-cameras
+python3 ./src/scripts/hand_yolo/collect_hand_images.py --list-cameras
 ```
 
 - macOS는 AVFoundation, Linux는 V4L2 백엔드로 자동 선택
@@ -91,7 +91,7 @@ python3 scripts/collect_hand_images.py --list-cameras
 ### 실행
 
 ```bash
-python3 scripts/collect_hand_images.py --cam <INDEX> --out datasets/hand/raw
+python3 ./src/scripts/hand_yolo/collect_hand_images.py --cam <INDEX> --out datasets/hand/raw
 ```
 
 ### 조작 키
@@ -136,15 +136,15 @@ git checkout feature/hand-yolo
 
 ```bash
 pip install ultralytics
-DEVICE=0 bash scripts/train_hand_yolo.sh          # CUDA
+DEVICE=0 bash ./src/scripts/hand_yolo/train_hand_yolo.sh          # CUDA
 ```
 
-환경 변수: `MODEL` (기본 `yolo11n.pt`), `EPOCHS` (100), `BATCH` (16), `IMGSZ` (640), `PATIENCE` (20), `RUN_NAME` (`hand_yolo_v1`)
+Nano 재학습 시 `MODEL=yolo11n.pt`, `RUN_NAME=hand_yolo_n_sweep_stable_v1`을 지정한다. 그 외 주요 환경 변수는 `EPOCHS` (100), `BATCH` (16), `IMGSZ` (640), `PATIENCE` (20)이다.
 
 ### 결과물
 
 ```
-outputs/train/hand_yolo_v1/
+outputs/train/hand_yolo_n_sweep_stable_v1/
 ├── weights/best.pt          # 실사용 모델
 ├── results.png              # 학습 곡선
 ├── confusion_matrix.png
@@ -165,6 +165,6 @@ outputs/train/hand_yolo_v1/
 ## 10. Git 정책
 
 - `datasets/hand/raw/` — **gitignored** (수집 스크립트로 재생성 가능)
-- `datasets/hand/yolo_v*/` — **커밋** (로봇 PC가 `git pull`로 확보)
+- `datasets/hand/yolo_v*/` — 현재 루트 `/datasets/` 정책에 따라 **gitignored**
 - `outputs/`, `runs/`, `*.pt` — **gitignored** (학습마다 새로 생성)
 - 대용량 raw는 히스토리 커밋 47dd175에 한 번 들어갔음 (강제로 지우지 않음)

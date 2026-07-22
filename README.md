@@ -87,7 +87,6 @@ ExpertSurgicalMentor/
 │   ├── command.md                      # 데이터 수집·학습·평가 전체 워크플로 런북
 │   ├── hand_safety_dataset.md          # 손 감지 데이터셋 문서
 │   ├── hand_yolo_training.md           # YOLO 학습 결과 보고서
-│   ├── ExpertSurgicalMentor_plan.md    # 초기 아키텍처 · 절차 기획안 (현재 구현과 스코프 차이 있음)
 │   └── diagrams/                       # Excalidraw 파이프라인 · 시나리오 다이어그램 + 썸네일
 ├── outputs/
 │   └── train/
@@ -265,7 +264,6 @@ scripts/run_act_object.sh <object_name>
 ## 한계 및 향후 과제
 
 - **VLM 라우터 미구현** — 현재는 사용자가 물체명을 직접 지정하거나 `run_cold_scenario.sh`의 정적 매핑(감기→pill)을 사용. 자연어 명령 "○○ 도구 줘" → 정책 자동 선택은 다음 단계.
-- **초기 기획 대비 축소된 범위** — `docs/ExpertSurgicalMentor_plan.md`에 있던 procedure/phase/step 그래프, Trainee 단계 평가, PracticeZone/ReturnZone, Feedback Generator, ROS 2 계층은 이번 MVP 범위에서 제외.
 - **데이터 수집 완료 물체 2종** — 파이프라인은 4종 지원하지만 syringe·pill만 40 ep씩 수집·학습 완료. glasses·xray는 추가 데이터 수집 필요.
 - **실제 수술 도구 미사용** — 접근 가능한 대체물로 검증. 실제 겸자·니들 홀더 등 도구로의 확장은 추가 데이터 수집 필요.
 - **대규모 반복 검증 없음** — 물체당 10회 이상의 성공률 통계 필요.
@@ -280,6 +278,5 @@ scripts/run_act_object.sh <object_name>
 | [`docs/command.md`](docs/command.md)                                                     | 데이터 수집 → 분할 → 학습 → 평가 전체 워크플로 (한글 런북) |
 | [`docs/hand_safety_dataset.md`](docs/hand_safety_dataset.md)                             | 손 감지 데이터셋 구성과 라벨링                             |
 | [`docs/hand_yolo_training.md`](docs/hand_yolo_training.md)                               | YOLO 학습 결과 보고서 (86 epoch, mAP50 0.975)              |
-| [`docs/ExpertSurgicalMentor_plan.md`](docs/ExpertSurgicalMentor_plan.md)                 | 초기 아키텍처와 절차 기획안                                |
 | [`docs/diagrams/pipeline_diagram.excalidraw`](docs/diagrams/pipeline_diagram.excalidraw) | 학습 + 실시간 추론 전체 파이프라인                         |
 | [`docs/diagrams/user_scenario.excalidraw`](docs/diagrams/user_scenario.excalidraw)       | 사용자 시나리오 (도구 전달 흐름)                           |

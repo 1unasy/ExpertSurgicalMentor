@@ -48,13 +48,13 @@ AMP: enabled
 source ~/venv/il/bin/activate
 cd ~/ExpertSurgicalMentor
 
-DEVICE=0 bash scripts/train_hand_yolo.sh
+DEVICE=0 bash src/scripts/hand_yolo/train_hand_yolo.sh
 ```
 
 CUDA 메모리가 부족할 때만 batch를 낮춘다.
 
 ```bash
-DEVICE=0 BATCH=8 bash scripts/train_hand_yolo.sh
+DEVICE=0 BATCH=8 bash src/scripts/hand_yolo/train_hand_yolo.sh
 ```
 
 ## 4. Early Stopping 결과
@@ -98,7 +98,7 @@ outputs/train/hand_yolo_v1
 배포 가중치:
 
 ```text
-outputs/train/hand_yolo_v1/weights/best.pt
+models/hand_yolo/best.pt
 ```
 
 ## 6. Validation 이미지 시각 검사
@@ -133,7 +133,7 @@ source ~/venv/il/bin/activate
 cd ~/ExpertSurgicalMentor
 
 yolo detect predict \
-  model=outputs/train/hand_yolo_v1/weights/best.pt \
+  model=models/hand_yolo/best.pt \
   source=datasets/hand/yolo_v1/hospital.yolov11/valid/images \
   imgsz=640 \
   conf=0.25 \
@@ -158,7 +158,7 @@ source ~/venv/il/bin/activate
 cd ~/ExpertSurgicalMentor
 
 yolo detect predict \
-  model=outputs/train/hand_yolo_v1/weights/best.pt \
+  model=models/hand_yolo/best.pt \
   source=4 \
   imgsz=640 \
   conf=0.15 \
@@ -169,35 +169,9 @@ yolo detect predict \
 
 `q` 또는 `Ctrl+C`로 종료한다.
 
-## 8. 커밋 대상
+## 8. YOLO11 n/s/m 손 감지 모델 비교 실험
 
-다음 항목은 재현, 검토, 배포에 필요하므로 Git 추적 대상으로 유지한다.
-
-```text
-scripts/train_hand_yolo.sh
-datasets/hand/yolo_v1/hospital.yolov11/
-outputs/train/hand_yolo_v1/args.yaml
-outputs/train/hand_yolo_v1/results.csv
-outputs/train/hand_yolo_v1/results.png
-outputs/train/hand_yolo_v1/Box*_curve.png
-outputs/train/hand_yolo_v1/confusion_matrix*.png
-outputs/train/hand_yolo_v1/val_batch0_labels.jpg
-outputs/train/hand_yolo_v1/val_batch0_pred.jpg
-outputs/train/hand_yolo_v1/weights/best.pt
-```
-
-다음 항목은 재생성 가능하거나 중복이므로 계속 제외한다.
-
-```text
-outputs/train/hand_yolo_v1/weights/last.pt
-runs/
-yolo11n.pt
-*.cache
-```
-
-## 9. YOLO11 n/s/m 손 감지 모델 비교 실험
-
-### 9.1 목적과 모델 역할
+### 8.1 목적과 모델 역할
 
 동일한 손 데이터셋에서 YOLO11n, YOLO11s, YOLO11m의 검출 성능과 모델 크기를 비교했다.
 이 세 모델은 ACT 행동 정책을 대체하지 않는다. 파이프라인에서 선택되는 것은 **손 감지
@@ -209,7 +183,7 @@ Object YOLO:  pill/syringe의 Main/Assist Tray 위치 검증
 ACT:          지정된 물품의 pick-and-place 행동 생성
 ```
 
-### 9.2 데이터 및 실험 환경
+### 8.2 데이터 및 실험 환경
 
 라벨링 전 `datasets/hand/raw` 원본은 학습 입력으로 사용하지 않았다. YOLO 형식으로
 라벨링된 다음 데이터만 사용했다.
@@ -244,7 +218,7 @@ Optimizer: AdamW
 Initial learning rate: 0.0005
 ```
 
-### 9.3 자동 optimizer 실험 실패와 안정화
+### 8.3 자동 optimizer 실험 실패와 안정화
 
 최초에는 세 모델 모두 `optimizer=auto`를 사용했다. YOLO11n은 정상 수렴했지만,
 Ultralytics가 자동 선택한 AdamW `lr=0.002`에서 YOLO11s는 validation fitness가 반복적으로
@@ -252,7 +226,7 @@ Ultralytics가 자동 선택한 AdamW `lr=0.002`에서 YOLO11s는 validation fit
 
 이는 GPU 메모리 부족이 아니라 작은 데이터셋에 비해 큰 모델의 학습률이 너무 높았던
 문제로 판단했다. 공정한 재비교에서는 세 모델 모두에 동일하게 `AdamW`,
-`lr0=0.0005`를 명시했다. 이를 위해 `scripts/train_hand_yolo.sh`가 `OPTIMIZER`, `LR0`
+`lr0=0.0005`를 명시했다. 이를 위해 `src/scripts/hand_yolo/train_hand_yolo.sh`가 `OPTIMIZER`, `LR0`
 환경변수를 받도록 확장됐다.
 
 재현 명령:
@@ -269,10 +243,10 @@ EPOCHS=100 \
 PATIENCE=20 \
 OPTIMIZER=AdamW \
 LR0=0.0005 \
-./scripts/train_hand_yolo_sweep.sh
+./src/scripts/hand_yolo/train_hand_yolo_sweep.sh
 ```
 
-### 9.4 비교 결과
+### 8.4 비교 결과
 
 각 모델의 `best.pt`에 해당하는 validation 결과다. `best_epoch`와 `total_epochs`는
 Ultralytics `results.csv`에 기록된 epoch 번호다.
@@ -309,10 +283,10 @@ precision(헛정지 최소화)과 지연(속도)이며 두 축에서 11n이 우�
 관측되면 11s 재평가를 고려한다. val 18박스로는 미묘한 격차의 통계적 유의성이 낮으므로
 최종 판단은 실제 운영 환경 테스트에 기반한다.
 
-### 9.5 파이프라인에서 모델 선택
+### 8.5 파이프라인에서 모델 선택
 
 기본은 YOLO11n. `run_cold_scenario.sh`와 `run_act_object.sh`는 별도 지정이 없으면
-배포용 `outputs/train/hand_yolo_v1/weights/best.pt`(11n, 배치 16 단일 학습본)를 사용한다.
+배포용 `models/hand_yolo/best.pt`(11n, 배치 16 단일 학습본)를 사용한다.
 스윕에서 튜닝한 11n 체크포인트로 바꿔서 감기 시나리오 설정을 검사:
 
 ```bash
@@ -320,14 +294,14 @@ source ~/venv/il/bin/activate
 cd ~/ExpertSurgicalMentor
 
 SAFETY_YOLO_MODEL="$PWD/outputs/train/hand_yolo_n_sweep_stable_v1/weights/best.pt" \
-./scripts/run_cold_scenario.sh 감기 --dry-run
+./src/scripts/pipeline/run_cold_scenario.sh 감기 --dry-run
 ```
 
 실제 전체 파이프라인 실행:
 
 ```bash
 SAFETY_YOLO_MODEL="$PWD/outputs/train/hand_yolo_n_sweep_stable_v1/weights/best.pt" \
-./scripts/run_cold_scenario.sh 감기
+./src/scripts/pipeline/run_cold_scenario.sh 감기
 ```
 
 모델 비교 시에는 위 경로에서 `n`을 `s` 또는 `m`으로 바꾼다. ACT 모델과 Object YOLO는
